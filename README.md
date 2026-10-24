@@ -6,6 +6,9 @@ Software completo de Processamento Digital de Imagens (PDI), Visão Computaciona
 
 ## 🚀 Funcionalidades
 
+### ✨ Estilos prontos (aba "Estilos" da interface gráfica)
+20 filtros de um clique no estilo de apps de foto (Clarendon, Gingham, Juno, Lark, Valencia, Nashville, Lo-fi, Moon, Noir, Sépia, Vintage, Frio, Quente, Pele suave, Desenho, Lápis, Pôster, Pixelado, Vinheta), com miniatura de pré-visualização da própria foto e controle de **intensidade** (0–100%). Também há desfazer (Ctrl+Z), atalhos, dicas ao passar o mouse e ajuda embutida. Os filtros ficam em `filtros.py`, montados com as operações do módulo de processamento.
+
 ### 🎨 Operações Básicas
 - **Inversão de Cores:** Negativo da imagem (`bitwise_not`).
 - **Brilho e Contraste:** Ajuste linear de escala e deslocamento com saturação em `[0, 255]`.
@@ -63,12 +66,14 @@ projeto_VisCom/
 ├── gui.py                 # Interface gráfica em Tkinter + Pillow + Matplotlib
 ├── main.py                # Interface de linha de comando com menu interativo
 ├── processamento.py       # Funções puras de PDI e visão computacional
+├── filtros.py             # Estilos prontos (estilo Instagram) da aba "Estilos"
 ├── reconhecimento.py      # Pipeline de detecção, treino LBPH e chamada
 ├── requirements.txt       # Dependências do projeto
 │
 ├── test_gui.py            # Testes automatizados da interface gráfica
 ├── test_menu.py           # Testes automatizados do menu em terminal
 ├── test_processamento.py  # Testes unitários das transformações de imagem
+├── test_filtros.py        # Testes dos estilos prontos
 │
 ├── faces/                 # Banco de fotos dos alunos (faces/<aluno>/...)
 ├── chamada_anotada/       # Frames e fotos gerados pelo módulo de chamada
@@ -152,7 +157,7 @@ python main.py
 
 ## 🧪 Execução dos Testes Automatizados
 
-O projeto conta com uma suíte de testes com **46 testes automatizados** cobrindo todas as funções de processamento, a navegação de menus e a interface gráfica:
+O projeto conta com uma suíte de testes com **mais de 100 testes automatizados** cobrindo todas as funções de processamento, a navegação de menus e a interface gráfica:
 
 ```bash
 pytest

@@ -150,3 +150,23 @@ def test_chamada_ao_vivo(app, monkeypatch):
     with open("chamada.csv", encoding="utf-8") as f:
         linhas = f.read()
     assert "bia" in linhas and "ana" not in linhas.split("aluno")[1]
+
+
+def test_estilos_desfazer_e_intensidade(app):
+    app.abrir()
+    assert len(app._miniaturas) == len(gui.filtros.FILTROS)
+    app._aplicar_estilo("Noir")
+    assert app.res.shape == app.orig.shape and not np.array_equal(app.res, app.orig)
+    assert len(app.historico) == 1
+    app.intensidade.set(0)
+    app._reaplicar_estilo()
+    assert np.array_equal(app.res, app.orig)  # 0% = original
+    assert len(app.historico) == 1  # reaplicar não empilha
+    app.desfazer()
+    assert np.array_equal(app.res, app.orig)
+    app.desfazer()  # histórico vazio: não quebra
+
+
+def test_estilo_sem_imagem(app):
+    app._aplicar_estilo("Noir")
+    assert app.res is None

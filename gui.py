@@ -7,6 +7,7 @@ import cv2
 import numpy as np
 from PIL import Image, ImageTk
 
+import filtros
 import processamento as p
 import reconhecimento as rf
 
@@ -102,24 +103,60 @@ class Dialogo(tk.Toplevel):
         self.destroy()
 
 
-class Painel(ttk.LabelFrame):
-    """Área que exibe uma imagem ajustada ao tamanho disponível."""
+class Tooltip:
+    """Balãozinho de ajuda que aparece ao parar o mouse sobre um widget."""
 
-    def __init__(self, pai, titulo):
+    def __init__(self, widget, texto, atraso=500):
+        self.widget, self.texto, self.atraso = widget, texto, atraso
+        self._id = self._janela = None
+        widget.bind("<Enter>", self._agendar, add="+")
+        widget.bind("<Leave>", self._fechar, add="+")
+        widget.bind("<ButtonPress>", self._fechar, add="+")
+
+    def _agendar(self, _e):
+        self._fechar()
+        self._id = self.widget.after(self.atraso, self._abrir)
+
+    def _abrir(self):
+        x, y = self.widget.winfo_rootx() + 12, self.widget.winfo_rooty() + self.widget.winfo_height() + 4
+        self._janela = tk.Toplevel(self.widget)
+        self._janela.wm_overrideredirect(True)
+        self._janela.wm_geometry(f"+{x}+{y}")
+        tk.Label(self._janela, text=self.texto, background="#fffbe6", relief="solid", borderwidth=1,
+                 padx=6, pady=3, wraplength=260, justify="left").pack()
+
+    def _fechar(self, _e=None):
+        if self._id:
+            self.widget.after_cancel(self._id)
+            self._id = None
+        if self._janela:
+            self._janela.destroy()
+            self._janela = None
+
+
+class Painel(ttk.LabelFrame):
+    """Área que exibe uma imagem ajustada ao tamanho disponível. Sem imagem, mostra `vazio`."""
+
+    def __init__(self, pai, titulo, vazio="", ao_clicar=None):
         super().__init__(pai, text=titulo)
         self.canvas = tk.Canvas(self, bg="#2b2b2b", highlightthickness=0)
         self.canvas.pack(fill="both", expand=True)
         self.img = None
+        self.vazio = vazio
         self._foto = None
         self.canvas.bind("<Configure>", lambda e: self.mostrar(self.img))
+        if ao_clicar:
+            self.canvas.bind("<Button-1>", lambda e: ao_clicar())
 
     def mostrar(self, img):
         self.img = img
         self.canvas.delete("all")
+        cw, ch = max(self.canvas.winfo_width(), 2), max(self.canvas.winfo_height(), 2)
         if img is None:
+            self.canvas.create_text(cw // 2, ch // 2, text=self.vazio, fill="#9a9a9a",
+                                    font=("Segoe UI", 12), justify="center", width=max(cw - 40, 40))
             return
         rgb = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB) if img.ndim == 2 else cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        cw, ch = max(self.canvas.winfo_width(), 2), max(self.canvas.winfo_height(), 2)
         esc = min(cw / rgb.shape[1], ch / rgb.shape[0])
         rgb = cv2.resize(rgb, (max(1, int(rgb.shape[1] * esc)), max(1, int(rgb.shape[0] * esc))),
                          interpolation=cv2.INTER_AREA if esc < 1 else cv2.INTER_LINEAR)
@@ -127,98 +164,258 @@ class Painel(ttk.LabelFrame):
         self.canvas.create_image(cw // 2, ch // 2, image=self._foto)
 
 
+AJUDA = """COMO USAR
+
+1. Abra uma foto (Ctrl+O).
+2. Na aba "✨ Estilos", clique em um filtro. A intensidade pode ser ajustada com o controle deslizante.
+3. As outras abas têm as ferramentas de processamento: cada botão abre uma janelinha com os ajustes.
+4. Compare o Original (esquerda) com o resultado (direita).
+5. Errou? Ctrl+Z desfaz. "Original" volta ao começo.
+6. Salve com Ctrl+S.
+
+DICAS
+• "Acumular efeitos": marcado, cada operação parte do resultado anterior (ex.: suavizar e depois aplicar um filtro).
+  Desmarcado, cada operação parte sempre da imagem original.
+• Passe o mouse sobre um botão para ver o que ele faz.
+• A aba "Faces" faz cadastro, treino e chamada automática."""
+
+TAM_MINIATURA = 92
+
+
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("Processamento de Imagens - Visão Computacional")
-        self.geometry("1280x760")
-        self.minsize(900, 560)
+        self.title("VisCom – Processamento de Imagens")
+        self.geometry("1320x780")
+        self.minsize(960, 600)
         self.orig = self.res = None
         self.caminho = None
+        self.historico = []
+        self.filtro_atual = None
+        self._miniaturas = []
         self.encadear = tk.BooleanVar(value=False)
-        self.status = tk.StringVar(value="Abra uma imagem para começar.")
+        self.intensidade = tk.DoubleVar(value=100)
+        self.status = tk.StringVar(value="Bem-vindo! Abra uma imagem (Ctrl+O) para começar.")
+        self._estilo()
         self._montar()
+        self._atalhos()
+
+    def _estilo(self):
+        s = ttk.Style(self)
+        s.configure(".", font=("Segoe UI", 10))
+        s.configure("TButton", padding=(8, 5))
+        s.configure("Acao.TButton", padding=(10, 8))
+        s.configure("Filtro.TButton", padding=2, font=("Segoe UI", 9))
+        s.configure("Titulo.TLabel", font=("Segoe UI", 11, "bold"))
+
+    def _atalhos(self):
+        self.bind("<Control-o>", lambda e: self.abrir())
+        self.bind("<Control-s>", lambda e: self.salvar())
+        self.bind("<Control-z>", lambda e: self.desfazer())
 
     # ---------- layout ----------
     def _montar(self):
-        barra = ttk.Frame(self, padding=4)
+        menu = tk.Menu(self)
+        arquivo = tk.Menu(menu, tearoff=0)
+        arquivo.add_command(label="Abrir…", accelerator="Ctrl+O", command=self.abrir)
+        arquivo.add_command(label="Salvar resultado…", accelerator="Ctrl+S", command=self.salvar)
+        arquivo.add_separator()
+        arquivo.add_command(label="Sair", command=self.destroy)
+        editar = tk.Menu(menu, tearoff=0)
+        editar.add_command(label="Desfazer", accelerator="Ctrl+Z", command=self.desfazer)
+        editar.add_command(label="Voltar à original", command=self.resetar)
+        ajuda = tk.Menu(menu, tearoff=0)
+        ajuda.add_command(label="Como usar", command=lambda: messagebox.showinfo("Como usar", AJUDA))
+        menu.add_cascade(label="Arquivo", menu=arquivo)
+        menu.add_cascade(label="Editar", menu=editar)
+        menu.add_cascade(label="Ajuda", menu=ajuda)
+        self.config(menu=menu)
+
+        barra = ttk.Frame(self, padding=(6, 6))
         barra.pack(fill="x")
-        for texto, cmd in (("Abrir…", self.abrir), ("Salvar resultado…", self.salvar),
-                           ("Descartar processamento", self.resetar)):
-            ttk.Button(barra, text=texto, command=cmd).pack(side="left", padx=2)
-        ttk.Checkbutton(barra, text="Encadear (aplicar sobre o resultado anterior)",
-                        variable=self.encadear).pack(side="left", padx=14)
+        for texto, cmd, dica in (
+                ("📂  Abrir", self.abrir, "Abrir uma imagem (Ctrl+O)"),
+                ("💾  Salvar", self.salvar, "Salvar o resultado em arquivo (Ctrl+S)"),
+                ("↩  Desfazer", self.desfazer, "Desfaz a última alteração (Ctrl+Z)"),
+                ("⟲  Original", self.resetar, "Descarta tudo e volta à imagem original")):
+            b = ttk.Button(barra, text=texto, command=cmd, style="Acao.TButton")
+            b.pack(side="left", padx=3)
+            Tooltip(b, dica)
+        c = ttk.Checkbutton(barra, text="Acumular efeitos", variable=self.encadear)
+        c.pack(side="left", padx=18)
+        Tooltip(c, "Marcado: cada efeito é aplicado sobre o resultado anterior.\n"
+                   "Desmarcado: cada efeito parte da imagem original.")
 
         corpo = ttk.PanedWindow(self, orient="horizontal")
-        corpo.pack(fill="both", expand=True, padx=4, pady=4)
+        corpo.pack(fill="both", expand=True, padx=6, pady=(0, 4))
 
-        nb = ttk.Notebook(corpo, width=250)
+        nb = ttk.Notebook(corpo, width=375)
         corpo.add(nb, weight=0)
+        nb.add(self._aba_estilos(nb), text="✨ Estilos")
         for secao, itens in self._menu():
-            aba = ttk.Frame(nb, padding=6)
+            aba = ttk.Frame(nb, padding=8)
             nb.add(aba, text=secao)
-            for rotulo, fn, livre in itens:
-                ttk.Button(aba, text=rotulo, command=lambda f=fn, l=livre: self._executar(f, l)
-                           ).pack(fill="x", pady=2)
+            for rotulo, fn, livre, dica in itens:
+                b = ttk.Button(aba, text=rotulo, command=lambda f=fn, l=livre: self._executar(f, l))
+                b.pack(fill="x", pady=3)
+                Tooltip(b, dica)
 
         imagens = ttk.Frame(corpo)
         corpo.add(imagens, weight=1)
         imagens.columnconfigure((0, 1), weight=1, uniform="p")
         imagens.rowconfigure(0, weight=1)
-        self.p_orig = Painel(imagens, "Original")
-        self.p_res = Painel(imagens, "Processada")
-        self.p_orig.grid(row=0, column=0, sticky="nsew", padx=(0, 2))
-        self.p_res.grid(row=0, column=1, sticky="nsew", padx=(2, 0))
+        self.p_orig = Painel(imagens, "Original", "Clique aqui ou tecle Ctrl+O\npara abrir uma imagem",
+                             ao_clicar=lambda: self.orig is None and self.abrir())
+        self.p_res = Painel(imagens, "Processada", "O resultado aparece aqui")
+        self.p_orig.grid(row=0, column=0, sticky="nsew", padx=(0, 3))
+        self.p_res.grid(row=0, column=1, sticky="nsew", padx=(3, 0))
+        self.p_orig.mostrar(None)
+        self.p_res.mostrar(None)
 
-        ttk.Label(self, textvariable=self.status, relief="sunken", anchor="w", padding=3
+        ttk.Label(self, textvariable=self.status, relief="sunken", anchor="w", padding=4
                   ).pack(fill="x", side="bottom")
+
+    def _aba_estilos(self, pai):
+        aba = ttk.Frame(pai, padding=6)
+        ttk.Label(aba, text="Escolha um estilo", style="Titulo.TLabel").pack(anchor="w")
+        ttk.Label(aba, text="Clique em um filtro para aplicar.", foreground="#666").pack(anchor="w")
+
+        inten = ttk.Frame(aba)
+        inten.pack(fill="x", pady=(8, 6))
+        ttk.Label(inten, text="Intensidade").pack(side="left")
+        self.lbl_inten = ttk.Label(inten, text="100%", width=5, anchor="e")
+        self.lbl_inten.pack(side="right")
+        esc = ttk.Scale(inten, from_=0, to=100, variable=self.intensidade,
+                        command=lambda v: self.lbl_inten.config(text=f"{float(v):.0f}%"))
+        esc.pack(side="left", fill="x", expand=True, padx=8)
+        esc.bind("<ButtonRelease-1>", lambda e: self._reaplicar_estilo())
+        Tooltip(esc, "Quanto do filtro é aplicado: 0% = foto original, 100% = filtro completo.")
+
+        area = ttk.Frame(aba)
+        area.pack(fill="both", expand=True)
+        self._canvas_est = tk.Canvas(area, highlightthickness=0)
+        barra = ttk.Scrollbar(area, orient="vertical", command=self._canvas_est.yview)
+        self._canvas_est.configure(yscrollcommand=barra.set)
+        barra.pack(side="right", fill="y")
+        self._canvas_est.pack(side="left", fill="both", expand=True)
+        self.grade = ttk.Frame(self._canvas_est)
+        self._canvas_est.create_window((0, 0), window=self.grade, anchor="nw")
+        self.grade.bind("<Configure>",
+                        lambda e: self._canvas_est.configure(scrollregion=self._canvas_est.bbox("all")))
+        self._canvas_est.bind("<Enter>", lambda e: self._canvas_est.bind_all(
+            "<MouseWheel>", lambda ev: self._canvas_est.yview_scroll(-1 * (ev.delta // 120), "units")))
+        self._canvas_est.bind("<Leave>", lambda e: self._canvas_est.unbind_all("<MouseWheel>"))
+        self._montar_grade()
+        return aba
+
+    def _montar_grade(self):
+        """(Re)cria os botões de filtro; cada um mostra uma miniatura da imagem atual."""
+        for w in self.grade.winfo_children():
+            w.destroy()
+        self._miniaturas = []
+        if self.orig is not None:
+            h, w = self.orig.shape[:2]
+            lado = min(h, w)
+            y0, x0 = (h - lado) // 2, (w - lado) // 2
+            recorte = self.orig[y0:y0 + lado, x0:x0 + lado]
+            base = cv2.resize(recorte, (TAM_MINIATURA, TAM_MINIATURA), interpolation=cv2.INTER_AREA)
+        else:
+            base = np.full((TAM_MINIATURA, TAM_MINIATURA, 3), 150, np.uint8)
+            cv2.putText(base, "?", (34, 62), cv2.FONT_HERSHEY_SIMPLEX, 1.8, (255, 255, 255), 3)
+        for i, (nome, (_fn, dica)) in enumerate(filtros.FILTROS.items()):
+            mini = filtros.aplicar_filtro(nome, base) if self.orig is not None else base
+            foto = ImageTk.PhotoImage(Image.fromarray(cv2.cvtColor(mini, cv2.COLOR_BGR2RGB)))
+            self._miniaturas.append(foto)
+            b = ttk.Button(self.grade, text=nome, image=foto, compound="top", style="Filtro.TButton",
+                           command=lambda n=nome: self._aplicar_estilo(n))
+            b.grid(row=i // 3, column=i % 3, padx=3, pady=3)
+            Tooltip(b, dica)
 
     def _menu(self):
         return [
             ("Básico", [
-                ("Inverter cores", self.a_inverter, False), ("Brilho e contraste", self.a_brilho, False),
-                ("Somar imagens", self.a_somar, False), ("Subtrair imagens", self.a_subtrair, False),
-                ("Níveis de cinza", self.a_cinza, False), ("RGB ⇄ HSV", self.a_hsv, False),
-                ("Redimensionar", self.a_redimensionar, False), ("Recortar ROI", self.a_recortar, False)]),
-            ("Filtros", [
-                ("Filtro da média", self.a_media, False), ("Filtro da mediana", self.a_mediana, False),
-                ("Filtro gaussiano", self.a_gauss, False), ("Bordas – Sobel", self.a_sobel, False),
-                ("Bordas – Canny", self.a_canny, False)]),
-            ("Histograma", [
-                ("Histograma", self.a_histograma, False), ("Equalização", self.a_equalizar, False),
-                ("Canais (split e análise)", self.a_canais, False), ("Binarização", self.a_binarizar, False),
-                ("Quantização", self.a_quantizar, False)]),
-            ("Segmentação", [
-                ("Crescimento de regiões", self.a_regioes, False),
-                ("Morfologia", self.a_morfologia, False)]),
+                ("Inverter cores", self.a_inverter, False, "Gera o negativo da imagem."),
+                ("Brilho e contraste", self.a_brilho, False, "Deixa a imagem mais clara/escura ou com mais/menos contraste."),
+                ("Somar imagens", self.a_somar, False, "Mistura esta imagem com outra (escolha o quanto de cada)."),
+                ("Subtrair imagens", self.a_subtrair, False, "Mostra a diferença entre esta imagem e outra."),
+                ("Níveis de cinza", self.a_cinza, False, "Converte para preto e branco."),
+                ("RGB ⇄ HSV", self.a_hsv, False, "Converte entre os modelos de cor e mostra os canais H, S e V."),
+                ("Redimensionar", self.a_redimensionar, False, "Muda o tamanho da imagem, por escala ou em pixels."),
+                ("Recortar região (ROI)", self.a_recortar, False, "Arraste o mouse sobre a área que deseja manter.")]),
+            ("Realce", [
+                ("Suavizar – média", self.a_media, False, "Desfoque simples; reduz ruído."),
+                ("Suavizar – mediana", self.a_mediana, False, "Remove pontinhos de ruído preservando contornos."),
+                ("Suavizar – gaussiano", self.a_gauss, False, "Desfoque suave e natural."),
+                ("Bordas – Sobel", self.a_sobel, False, "Destaca contornos pela variação de brilho."),
+                ("Bordas – Canny", self.a_canny, False, "Detector de bordas finas e precisas.")]),
+            ("Análise", [
+                ("Histograma", self.a_histograma, False, "Gráfico da distribuição de brilho/cores."),
+                ("Equalizar histograma", self.a_equalizar, False, "Melhora o contraste distribuindo melhor os tons."),
+                ("Canais de cor", self.a_canais, False, "Separa azul, verde e vermelho e mostra estatísticas."),
+                ("Binarizar (preto/branco puro)", self.a_binarizar, False, "Limiar fixo, adaptativo ou Otsu."),
+                ("Quantizar (menos cores)", self.a_quantizar, False, "Reduz a quantidade de níveis de cor.")]),
+            ("Segmentar", [
+                ("Crescimento de regiões", self.a_regioes, False, "Clique num ponto e a região de cor parecida é destacada."),
+                ("Morfologia", self.a_morfologia, False, "Erosão, dilatação, abertura e fechamento.")]),
             ("Faces", [
-                ("Detectar faces", self.a_detectar, False),
-                ("Cadastrar aluno (fotos)…", self.a_cadastrar, True),
-                ("Treinar modelo", self.a_treinar, True),
-                ("Reconhecer faces", self.a_reconhecer, False),
-                ("Chamada automática…", self.a_chamada, True),
-                ("Chamada ao vivo (câmera)…", self.a_chamada_camera, True)]),
+                ("Detectar faces", self.a_detectar, False, "Marca os rostos encontrados na imagem."),
+                ("Cadastrar aluno (fotos)…", self.a_cadastrar, True, "Guarda fotos de uma pessoa para o reconhecimento."),
+                ("Treinar modelo", self.a_treinar, True, "Aprende os rostos cadastrados (refaça após cadastrar)."),
+                ("Reconhecer faces", self.a_reconhecer, False, "Identifica quem aparece na imagem."),
+                ("Chamada automática…", self.a_chamada, True, "Faz a chamada a partir de foto, pasta de fotos ou vídeo."),
+                ("Chamada ao vivo (câmera)…", self.a_chamada_camera, True, "Marca presença em tempo real pela câmera.")]),
         ]
 
     # ---------- infraestrutura ----------
     def _executar(self, fn, livre):
         if not livre and self.orig is None:
-            messagebox.showinfo("Sem imagem", "Abra uma imagem primeiro.")
+            messagebox.showinfo("Sem imagem", "Abra uma imagem primeiro (Ctrl+O).")
             return
+        self.config(cursor="watch")
+        self.update_idletasks()
         try:
             fn()
         except (cv2.error, ValueError, OSError, RuntimeError) as e:
             messagebox.showerror("Erro", str(e))
+        finally:
+            self.config(cursor="")
 
     def base(self):
         return self.res if self.encadear.get() and self.res is not None else self.orig
 
     def aplicar(self, img, nome):
+        if self.res is not None:
+            self.historico.append(self.res)
+            del self.historico[:-30]
+        self._mostrar_resultado(img, nome)
+
+    def _mostrar_resultado(self, img, nome):
         self.res = img
         self.p_res.mostrar(img)
         self.p_res.config(text=f"Processada – {nome}")
         h, w = img.shape[:2]
         self.status.set(f"{nome}  |  resultado {w}x{h}")
+
+    def desfazer(self):
+        if not self.historico:
+            self.status.set("Nada para desfazer.")
+            return
+        self._mostrar_resultado(self.historico.pop(), "desfeito")
+
+    def _aplicar_estilo(self, nome):
+        if self.orig is None:
+            messagebox.showinfo("Sem imagem", "Abra uma imagem primeiro (Ctrl+O).")
+            return
+        self.filtro_atual = nome
+        self._executar(lambda: self._estilo_agora(nome, push=True), True)
+
+    def _reaplicar_estilo(self):
+        if self.filtro_atual and self.orig is not None:
+            self._executar(lambda: self._estilo_agora(self.filtro_atual, push=False), True)
+
+    def _estilo_agora(self, nome, push):
+        out = filtros.aplicar_filtro(nome, self.base(), self.intensidade.get() / 100)
+        (self.aplicar if push else self._mostrar_resultado)(out, f"estilo {nome}")
 
     def pedir(self, titulo, campos):
         d = Dialogo(self, titulo, campos)
@@ -244,9 +441,12 @@ class App(tk.Tk):
             messagebox.showerror("Erro", "Não foi possível abrir a imagem.")
             return
         self.orig, self.res, self.caminho = img, img.copy(), c
+        self.historico.clear()
+        self.filtro_atual = None
         self.p_orig.mostrar(self.orig)
         self.p_res.config(text="Processada")
         self.p_res.mostrar(self.res)
+        self._montar_grade()
         self.status.set(f"{os.path.basename(c)}  |  {img.shape[1]}x{img.shape[0]}")
 
     def salvar(self):

@@ -221,8 +221,16 @@ def abrir_camera(fonte=0):
             cap = cv2.VideoCapture(x, cv2.CAP_DSHOW) if os.name == "nt" else cv2.VideoCapture(x)
         else:
             cap = cv2.VideoCapture(x)
-        if cap.isOpened() and cap.read()[0]:
-            return cap
+        if not cap.isOpened():
+            return None
+        # câmeras virtuais (DroidCam) abrem mesmo sem celular conectado e só entregam
+        # quadros pretos; dá alguns quadros de aquecimento antes de aceitar
+        for _ in range(30 if isinstance(x, int) else 1):
+            ok, quadro = cap.read()
+            if ok and quadro.mean() > 2:
+                return cap
+            if not ok and not isinstance(x, int):
+                break
         cap.release()
         return None
 
@@ -241,7 +249,10 @@ def abrir_camera(fonte=0):
             outra.release()
             ok.append(i)
     dica = f" Câmeras que responderam: {ok}." if ok else " Nenhuma câmera respondeu (o DroidCam está conectado?)."
-    raise RuntimeError(f"Não foi possível abrir a câmera {alvo}.{dica}")
+    raise RuntimeError(
+        f"Não foi possível obter imagem da câmera {alvo}.{dica}\n"
+        "Se ela aparece no Windows mas a imagem é preta: abra o programa DroidCam Client no PC, "
+        "informe o IP do celular (porta 4747) e clique em Start; feche outros programas que usem a câmera.")
 
 
 def chamada_camera(fonte=0, arquivo="chamada.csv", confirmacoes=5):
