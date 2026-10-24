@@ -1,184 +1,290 @@
 # 👁️ VisCom – Sistema de Processamento de Imagens e Reconhecimento Facial
 
-Software completo de Processamento Digital de Imagens (PDI), Visão Computacional e Reconhecimento Facial desenvolvido em Python e OpenCV. O sistema conta com duas interfaces: uma **Interface Gráfica (GUI)** intuitiva com visualização lado a lado e uma **Interface em Linha de Comando (CLI)** interativa via terminal.
+Software completo de **Processamento Digital de Imagens (PDI)**, **Visão Computacional** e **Reconhecimento Facial com Chamada Automática**, desenvolvido em Python e OpenCV. O sistema conta com duas interfaces:
+- **Interface Gráfica (GUI):** Interface desktop moderna em Tkinter + Pillow, com visualização lado a lado ("Original" vs "Processada"), formulários embutidos no painel lateral com **prévia em tempo real**, suporte a desfazer (Ctrl+Z) e 20 estilos artísticos prontos.
+- **Interface em Linha de Comando (CLI):** Menu de terminal interativo para uso headless ou testes rápidos via OpenCV (`cv2.imshow`).
 
 ---
 
-## 🚀 Funcionalidades
+## 🚦 Estado Atual do Projeto
 
-### 🎛️ Ajustes no próprio painel
-Cada ferramenta abre seus controles embaixo dos botões, na mesma aba (sem janelas novas): barras deslizantes com caixa numérica, listas de opções e caixas de seleção, com **prévia ao vivo** na imagem processada. Os botões *Aplicar*, *↺ (padrão)* e *Cancelar* confirmam, restauram ou descartam o ajuste. Ferramentas extras: saturação, nitidez, rotação, espelhamento e detecção de contornos, linhas, círculos e cantos.
+O projeto encontra-se em **estado avançado, maduro e 100% funcional**, com todos os requisitos centrais implementados e validados por uma suíte completa de testes automatizados.
 
-### ✨ Estilos prontos (última aba da interface gráfica)
-20 filtros de um clique no estilo de apps de foto (Clarendon, Gingham, Juno, Lark, Valencia, Nashville, Lo-fi, Moon, Noir, Sépia, Vintage, Frio, Quente, Pele suave, Desenho, Lápis, Pôster, Pixelado, Vinheta), com miniatura de pré-visualização da própria foto e controle de **intensidade** (0–100%). Também há desfazer (Ctrl+Z), atalhos, dicas ao passar o mouse e ajuda embutida. Os filtros ficam em `filtros.py`, montados com as operações do módulo de processamento.
+### Resumo dos Módulos
 
-### 🎨 Operações Básicas
-- **Inversão de Cores:** Negativo da imagem (`bitwise_not`).
-- **Brilho e Contraste:** Ajuste linear de escala e deslocamento com saturação em `[0, 255]`.
-- **Operações Aritméticas:**
-  - Soma ponderada / blending de duas imagens com redimensionamento automático.
-  - Subtração absoluta ($|A - B|$) para detecção de diferenças.
-- **Conversão de Espaços de Cor:**
-  - BGR para Níveis de Cinza.
-  - BGR para HSV e vice-versa, com visualização isolada dos canais $H$ (Matiz), $S$ (Saturação) e $V$ (Brilho).
-- **Transformações Geométricas e Recorte:**
-  - Redimensionamento por fator de escala ou dimensões fixas (largura/altura) com interpolação adequada (`INTER_AREA` / `INTER_CUBIC`).
-  - Recorte de Região de Interesse (ROI) via seleção interativa com o mouse ou coordenadas manuais.
+| Módulo / Recurso | Arquivo Principal | Status | Cobertura de Testes |
+| :--- | :--- | :---: | :---: |
+| **Operações Básicas** (brilho, contraste, soma, subtração, cinza, HSV, redimensionamento, recorte, rotação, espelhamento) | `processamento.py` | Concluído | 100% (`test_processamento.py`) |
+| **Filtros e Realce** (média, mediana, gaussiano, nitidez, Sobel, Canny) | `processamento.py` | Concluído | 100% (`test_processamento.py`) |
+| **Histograma e Intensidade** (cálculo, equalização em V/HSV, canais BGR, binarização fixa/adaptativa/Otsu, quantização) | `processamento.py` | Concluído | 100% (`test_processamento.py`) |
+| **Segmentação e Formas** (crescimento de regiões, morfologia, contornos, retas Hough, círculos Hough, cantos Shi-Tomasi) | `processamento.py` | Concluído | 100% (`test_processamento.py`) |
+| **Estilos Artísticos (20 Filtros tipo Instagram)** | `filtros.py` | Concluído | 100% (`test_filtros.py`) |
+| **Pipeline Facial (Haar Cascade + LBPH)** | `reconhecimento.py` | Concluído | 100% (`test_processamento.py`) |
+| **Chamada por Fotos, Pastas e Vídeos** | `reconhecimento.py` | Concluído | 100% (`test_processamento.py`) |
+| **Chamada ao Vivo (Webcam e Câmera IP / DroidCam)** | `reconhecimento.py` | Concluído | 100% (`test_gui.py`, `test_menu.py`) |
+| **Interface Gráfica com Ajustes Embutidos** | `gui.py` | Concluído | 100% (`test_gui.py`) |
+| **Menu de Terminal (CLI)** | `main.py` | Concluído | 100% (`test_menu.py`) |
+| **Suíte de Testes Automatizados** | `test_*.py` | **128 testes passando** | Execução via `pytest` |
 
-### 🔍 Filtragem e Detecção de Bordas
-- **Suavização / Redução de Ruído:**
-  - Filtro da Média (Box filter).
-  - Filtro da Mediana (preservação de bordas e remoção de ruído sal e pimenta).
-  - Filtro Gaussiano com desvio-padrão ($\sigma$) configurável.
-- **Detecção de Bordas:**
-  - Operador de Sobel (magnitude do gradiente $\sqrt{G_x^2 + G_y^2}$).
-  - Detector de Canny com limiares inferior e superior ajustáveis.
-
-### 📊 Histograma e Análise de Intensidade
-- **Cálculo e Exibição de Histogramas:** Gráficos interativos por canal (Cinza ou BGR) utilizando Matplotlib.
-- **Equalização de Histograma:** Equalização direta em tons de cinza ou equalização seletiva no canal de brilho ($V$) do espaço HSV para imagens coloridas.
-- **Análise de Canais:** Visualização individual dos canais B, G e R com métricas estatísticas (média, desvio padrão, valores mínimo e máximo).
-- **Binarização (Thresholding):**
-  - Limiar Global Fixo.
-  - Limiar Adaptativo (Gaussiano).
-  - Limiar Automático de Otsu.
-- **Quantização:** Redução da profundidade de cores em $N$ níveis de intensidade por canal.
-
-### 🧩 Segmentação e Morfologia Matemática
-- **Crescimento de Regiões:** Segmentação com vizinhança-8 a partir de semente interativa escolhida por clique do mouse, agrupando pixels por tolerância de cor/distância.
-- **Destaque Visual:** Sobreposição translúcida verde sobre a área segmentada.
-- **Operações Morfológicas:** Erosão, Dilatação, Abertura e Fechamento com elementos estruturantes em formato de Retângulo, Elipse ou Cruz, com controle de iterações e binarização prévia opcional.
-
-### 👤 Reconhecimento Facial e Chamada Automática
-- **Detecção Facial:** Classificador Haar Cascade pré-treinado (`haarcascade_frontalface_default.xml`).
-- **Cadastro Guiado de Alunos:** Filtro que aceita fotos avulsas ou pastas, validando a presença de exatamente 1 rosto antes de salvar no banco de dados.
-- **Treinamento LBPH:** Treinador `cv2.face.LBPHFaceRecognizer` com normalização de tamanho e equalização de histograma, gerando os artefatos `modelo_lbph.yml` e `rotulos.txt`.
-- **Reconhecimento em Imagem:** Identificação visual com caixas delimitadoras e indicação da confiança/distância.
-- **Sistema de Chamada Automática:**
-  - Suporte a fotos de turma, diretório de fotos ou **vídeo** (`.mp4`, `.avi`, `.mov`, etc.).
-  - Configuração de confirmações mínimas (frames consecutivos) para evitar falsos positivos.
-  - Registro de presença com data e hora em `chamada.csv` (sem duplicatas no mesmo dia).
-  - Salvamento de frames anotados com identificação dos alunos na pasta `chamada_anotada/`.
+> ℹ️ **Nota para quem acabou de clonar o repositório:**
+> Arquivos como `modelo_lbph.yml`, `rotulos.txt`, `chamada.csv` e as fotos dentro de `faces/*` são dados gerados em tempo de execução e são intencionalmente ignorados pelo `.gitignore`. Após clonar, siga a seção [Primeiros Passos com Reconhecimento Facial](#-primeiros-passos-com-o-reconhecimento-facial) para gerar seu modelo local.
 
 ---
 
-## 📁 Estrutura do Projeto
+## 📁 Onde Está Cada Coisa (Arquitetura do Projeto)
+
+O repositório é organizado de forma modular, com clara separação entre **lógica pura de processamento**, **regras biométricas**, **interfaces de usuário** e **testes**:
 
 ```text
 projeto_VisCom/
-├── gui.py                 # Interface gráfica em Tkinter + Pillow + Matplotlib
-├── main.py                # Interface de linha de comando com menu interativo
-├── processamento.py       # Funções puras de PDI e visão computacional
-├── filtros.py             # Estilos prontos (estilo Instagram) da aba "Estilos"
-├── reconhecimento.py      # Pipeline de detecção, treino LBPH e chamada
-├── requirements.txt       # Dependências do projeto
 │
-├── test_gui.py            # Testes automatizados da interface gráfica
-├── test_menu.py           # Testes automatizados do menu em terminal
-├── test_processamento.py  # Testes unitários das transformações de imagem
-├── test_filtros.py        # Testes dos estilos prontos
+├── 🧠 LÓGICA E PROCESSAMENTO
+│   ├── processamento.py       # Funções puras de PDI e visão computacional (OpenCV + NumPy)
+│   ├── filtros.py             # 20 estilos de imagem prontos compostos a partir do processamento
+│   └── reconhecimento.py      # Detecção Haar Cascade, treino LBPH, chamada por foto/vídeo/câmera
 │
-├── faces/                 # Banco de fotos dos alunos (faces/<aluno>/...)
-├── chamada_anotada/       # Frames e fotos gerados pelo módulo de chamada
-├── modelo_lbph.yml        # Modelo serializado do reconhecedor facial (gerado)
-├── rotulos.txt            # Mapeamento ID -> Nome do aluno (gerado)
-└── chamada.csv            # Planilha com histórico de presenças registradas
+├── 🖥️ INTERFACES DE USUÁRIO
+│   ├── gui.py                 # Interface gráfica desktop (Tkinter + ttk + Pillow + Matplotlib)
+│   └── main.py                # Interface de terminal (CLI) com menu textual numerado
+│
+├── 🧪 TESTES AUTOMATIZADOS
+│   ├── test_processamento.py  # Testes unitários das transformações matemáticas de imagem
+│   ├── test_filtros.py        # Testes de preservação de tipo/forma e invariantes dos filtros
+│   ├── test_gui.py            # Testes da interface gráfica, formulários embutidos e fluxos
+│   └── test_menu.py           # Testes dos fluxos e comandos do menu CLI
+│
+├── 📂 DADOS E ARTEFATOS LOCAIS (gerados em tempo de execução)
+│   ├── faces/                 # Banco de fotos organizadas por pasta de aluno: faces/<nome>/...
+│   │   └── README.md          # Instruções específicas sobre o banco de imagens
+│   ├── chamada_anotada/       # Frames anotados salvos pelo processo de chamada
+│   ├── modelo_lbph.yml        # Classificador facial LBPH treinado e serializado (gerado)
+│   ├── rotulos.txt            # Mapeamento do ID numérico para o nome do aluno (gerado)
+│   └── chamada.csv            # Planilha CSV com histórico de presenças registradas (gerado)
+│
+└── ⚙️ CONFIGURAÇÃO
+    ├── requirements.txt       # Dependências do Python (opencv-contrib-python, numpy, pillow, etc.)
+    ├── .gitignore             # Arquivos ignorados (fotos, modelos treinados, planilhas geradas)
+    └── README.md              # Documentação geral do projeto
 ```
 
----
+### Divisão de Responsabilidades
 
-## 🛠️ Instalação e Pré-requisitos
-
-Recomenda-se o uso de ambiente virtual Python (versão 3.9 ou superior).
-
-1. **Clone ou acesse o repositório:**
-   ```bash
-   cd projeto_VisCom
-   ```
-
-2. **Crie e ative um ambiente virtual:**
-   - **Linux / macOS:**
-     ```bash
-     python -m venv .venv
-     source .venv/bin/activate
-     ```
-   - **Windows (PowerShell):**
-     ```powershell
-     python -m venv .venv
-     .venv\Scripts\Activate.ps1
-     ```
-
-3. **Instale as dependências:**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-> **Atenção:** O projeto utiliza `opencv-contrib-python<5` para incluir o módulo `cv2.face`, necessário para o reconhecedor LBPH.
+| Arquivo | O que deve ficar nele | O que NÃO deve ficar nele |
+| :--- | :--- | :--- |
+| **`processamento.py`** | Funções puras de imagem: recebem um `ndarray` BGR/Cinza e parâmetros, retornam um novo `ndarray`. Devem ser puras e não mutar o array original. | Diálogos com usuário, janelas, `print()`, chamadas de `input()`. |
+| **`filtros.py`** | Composições estéticas de filtros inspirados no Instagram (Clarendon, Vintage, Noir, etc.) que utilizam as funções de `processamento.py`. | Lógica de interface com usuário ou gerenciamento de janelas. |
+| **`reconhecimento.py`** | Algoritmos de detecção (`cv2.CascadeClassifier`), treino e predição (`cv2.face.LBPHFaceRecognizer`), sessão de chamada (`SessaoChamada`), leitura de câmeras (webcam, DroidCam, RTSP) e gravação de CSV. | Telas Tkinter ou menus de texto interativos. |
+| **`gui.py`** | Layouts Tkinter, abas, controles deslizantes (`Formulario`), manipulação de eventos do mouse/teclado, conversão OpenCV -> ImageTk e exibição em Canvas. | Cálculos matemáticos de filtros ou manipulação direta de matrizes de imagem sem usar os módulos de lógica. |
+| **`main.py`** | Loop de menu textual no terminal, captura de entradas com `input()`, roteamento para as funções dos módulos e exibição rápida via `cv2.imshow`. | Redefinição de filtros já existentes em `processamento.py`. |
 
 ---
 
-## 🖥️ Como Executar
+## 🛠️ Instalação e Configuração
+
+### Pré-requisitos
+- **Python 3.9 a 3.12** instalado no sistema.
+- Câmera integrada (webcam) ou celular com app **DroidCam** / **IP Webcam** (caso deseje testar a chamada ao vivo).
+
+### 1. Clonar o repositório
+```bash
+git clone <URL_DO_REPOSITORIO>
+cd projeto_VisCom
+```
+
+### 2. Criar e ativar o ambiente virtual
+
+- **No Windows (PowerShell):**
+  ```powershell
+  python -m venv .venv
+  .venv\Scripts\Activate.ps1
+  ```
+  *(Se houver erro de política de execução no PowerShell, rode antes: `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass`)*
+
+- **No Linux / macOS:**
+  ```bash
+  python3 -m venv .venv
+  source .venv/bin/activate
+  ```
+
+### 3. Instalar as dependências
+```bash
+pip install -r requirements.txt
+```
+
+> ⚠️ **Atenção:** É mandatório utilizar `opencv-contrib-python<5` (já especificado no `requirements.txt`), pois o módulo `cv2.face` (necessário para o LBPH) não está presente na versão padrão do OpenCV.
+
+---
+
+## 🚀 Como Executar
 
 ### 1. Interface Gráfica (Recomendado)
-Interface visual moderna com abas, diálogos modais para parâmetros e painel duplo de comparação ("Original" vs "Processada"):
+A interface gráfica é ideal para uso diário, apresentações e demonstrações interativas:
+
 ```bash
 python gui.py
 ```
-- **Modo Encadear:** Ao marcar a caixa *Encadear*, as operações seguintes são aplicadas sobre o último resultado obtido, permitindo encadear filtros e transformações.
-- **Suporte a Acentos:** Tratamento de caminhos com caracteres especiais no Windows através de streams de bytes do NumPy.
 
-### 2. Menu Interativo via Terminal (CLI)
-Para ambientes headless ou preferência por linha de comando:
+**Principais recursos da GUI:**
+- **Visualização Lado a Lado:** Painel esquerdo com a imagem "Original" e painel direito com o "Resultado".
+- **Painel de Parâmetros Embutido:** Ao clicar em uma ferramenta, seus sliders e seletores abrem logo abaixo dos botões na própria aba (sem abrir pop-ups incômodos). A imagem processada atualiza em tempo real enquanto você ajusta as barras.
+- **Botões do Painel:**
+  - `✔ Aplicar`: Confirma a alteração e atualiza o histórico.
+  - `↺`: Restaura os valores padrão da ferramenta.
+  - `✖ Cancelar`: Descarta a prévia e volta ao resultado anterior.
+- **Caixa "Encadear":** Quando marcada, a próxima operação é aplicada sobre o resultado anterior (permitindo combinar múltiplos filtros em sequência).
+- **Desfazer:** Use o botão `Desfazer` ou o atalho `Ctrl+Z` (armazena até 30 passos).
+- **Aba "Estilos":** 20 filtros pré-configurados com miniatura gerada a partir da própria foto e slider de intensidade (0% a 100%).
+- **Zoom e Pan:** Suporte a arrastar a imagem e visualizar detalhes.
+
+### 2. Interface via Terminal (CLI)
+Para testes rápidos, depuração ou ambientes sem servidor gráfico:
+
 ```bash
 python main.py
 ```
-- Exibe o menu numerado por categorias.
-- Permite abrir imagens, aplicar filtros, encadear operações e inspecionar os resultados lado a lado via janela do OpenCV (`cv2.imshow`).
+
+- Exibe menu numerado dividido em:
+  1. Entrada / Saída
+  2. Operações Básicas
+  3. Filtragem e Realce
+  4. Histograma e Intensidade
+  5. Segmentação e Morfologia
+  6. Reconhecimento Facial
 
 ---
 
-## 🧑‍🏫 Guia de Reconhecimento Facial e Chamada
+## 🧑‍🎓 Primeiros Passos com o Reconhecimento Facial
 
-1. **Cadastro dos Alunos:**
-   - Pela GUI ou Terminal, utilize a opção **"Cadastrar aluno (fotos)"**.
-   - Forneça o nome do aluno e uma pasta contendo suas fotos (ou uma foto individual).
-   - O sistema valida automaticamente se a imagem possui exatamente 1 rosto nítido e a armazena em `faces/<nome_do_aluno>/`.
-   - *Alternativa manual:* Crie diretamente a pasta `faces/<nome_do_aluno>/` e adicione imagens `.jpg` ou `.png`.
+O módulo biométrico é capaz de reconhecer alunos cadastrados e emitir relatórios de presença em tempo real ou a partir de mídias pré-gravadas.
 
-2. **Treinar o Modelo:**
-   - Execute a opção **"Treinar modelo"**.
-   - As fotos serão normalizadas para 200×200 pixels em escala de cinza e equalizadas.
-   - Os arquivos `modelo_lbph.yml` e `rotulos.txt` serão gerados no diretório raiz.
+### Passo 1: Cadastrar Alunos
+O classificador precisa de fotos para aprender a reconhecer cada indivíduo:
+- **Pela Interface:** Na aba **Faces**, clique em **Cadastrar aluno**. Digite o nome do aluno e selecione uma pasta com fotos dele (ou uma foto individual). O sistema valida se há exatamente 1 rosto nítido antes de salvar.
+- **Manualmente:** Crie uma subpasta dentro de `faces/` com o nome da pessoa (ex.: `faces/maria/`) e cole ali fotos nos formatos `.jpg` ou `.png`.
 
-3. **Realizar a Chamada:**
-   - Selecione a opção **"Chamada automática"**.
-   - Indique o arquivo de imagem, pasta com fotos da turma ou arquivo de vídeo.
-   - Configure o número de confirmações necessárias (útil em vídeos para descartar falsos positivos ocasionais).
-   - O sistema marcará os presentes, exibirá a listagem na tela e salvará o registro em `chamada.csv`, com as imagens anotadas em `chamada_anotada/`.
+### Passo 2: Treinar o Modelo
+- Clique em **Treinar modelo** na aba **Faces** da GUI (ou opção correspondente no terminal).
+- O algoritmo normaliza as faces (200x200 pixels em escala de cinza equalizada) e treina o `LBPHFaceRecognizer`.
+- Serão gerados na raiz do projeto:
+  - `modelo_lbph.yml`: Parâmetros do modelo treinado.
+  - `rotulos.txt`: Mapeamento entre os IDs numéricos e os nomes dos alunos.
+
+### Passo 3: Executar a Chamada
+
+Há três maneiras de executar a chamada:
+1. **Por Foto ou Pasta de Fotos:** Analisa as fotos da turma e marca quem estiver presente.
+2. **Por Arquivo de Vídeo (`.mp4`, `.avi`, etc.):** Analisa os frames e marca presença após um número configurável de confirmações consecutivas.
+3. **Pela Câmera ao Vivo:**
+   - **Webcam Integrada:** Informe `0` (ou `1`).
+   - **Celular via DroidCam:** Deixe o app DroidCam aberto no celular na mesma rede Wi-Fi e informe o IP exibido na tela (ex.: `192.168.18.4` ou `192.168.1.15:4747`). O sistema conecta automaticamente via streaming HTTP.
+   - Pressione `ESC` na janela para encerrar a sessão.
+
+**Resultados Gerados:**
+- `chamada.csv`: Planilha com data, horário e nome do aluno (evita registros duplicados no mesmo dia).
+- `chamada_anotada/`: Pasta contendo cópia dos frames anotados com as caixas delimitadoras e nomes dos alunos reconhecidos.
 
 ---
 
-## 🧪 Execução dos Testes Automatizados
+## 🧪 Testes Automatizados
 
-O projeto conta com uma suíte de testes com **mais de 100 testes automatizados** cobrindo todas as funções de processamento, a navegação de menus e a interface gráfica:
+O projeto adota testes automatizados com `pytest` para garantir que nenhuma alteração quebre filtros ou componentes existentes.
 
+Para rodar toda a suíte de testes:
 ```bash
 pytest
 ```
 
-Para executar exibindo detalhes e relatórios verbosos:
+Para rodar com detalhes de cada teste executado:
 ```bash
 pytest -v
 ```
 
+Para rodar testes de um arquivo específico:
+```bash
+pytest test_processamento.py -v
+pytest test_filtros.py -v
+pytest test_gui.py -v
+pytest test_menu.py -v
+```
+
 ---
 
-## 📦 Tecnologias Utilizadas
+## 🤝 Guia de Contribuição para o Grupo
 
-- **[Python](https://www.python.org/):** Linguagem base do projeto.
-- **[OpenCV (opencv-contrib-python)](https://opencv.org/):** Algoritmos de visão computacional, Haar Cascades e reconhecedor LBPH.
-- **[NumPy](https://numpy.org/):** Manipulação vetorial e matricial de tensores de imagem.
-- **[Matplotlib](https://matplotlib.org/):** Visualização e plotagem de histogramas.
-- **[Pillow (PIL)](https://python-pillow.org/):** Ponte de conversão entre tensores OpenCV e o Canvas do Tkinter.
-- **[Tkinter / ttk](https://docs.python.org/3/library/tkinter.html):** Framework de interface gráfica nativo.
-- **[pytest](https://docs.pytest.org/):** Suíte de testes automatizados e integração contínua.
+Para que todos trabalhem em harmonia e sem conflitos de código, sigam estas diretrizes:
+
+### 1. Fluxo de Trabalho com Git
+- **Não trabalhe diretamente na branch `main`:** Crie uma branch para a sua funcionalidade:
+  ```bash
+  git checkout -b feature/nome-da-funcionalidade
+  ```
+- **Antes de abrir Pull Request / mergear:**
+  1. Rode os testes e garanta que todos passem:
+     ```bash
+     pytest -v
+     ```
+  2. Atualize sua branch com a `main`:
+     ```bash
+     git checkout main
+     git pull
+     git checkout feature/nome-da-funcionalidade
+     git merge main
+     ```
+- **Nunca force commit de fotos pesadas ou arquivos gerados:**
+  Mantenha `faces/*`, `.yml`, `.csv` e pastas de cache ignorados pelo Git para não inflar o repositório.
+
+### 2. Como Adicionar uma Nova Operação de PDI
+
+Se você precisar criar uma nova operação de imagem:
+
+1. **Implemente a função pura em `processamento.py`:**
+   ```python
+   def meu_novo_filtro(img, parametro=1.0):
+       """Recebe imagem BGR e retorna nova imagem BGR processada."""
+       saida = img.copy()
+       # ... sua lógica com OpenCV ou NumPy ...
+       return saida
+   ```
+2. **Adicione o teste unitário em `test_processamento.py`:**
+   Garante que a função funciona, trata tipos adequadamente e não altera a imagem original.
+3. **Exponha na Interface de Linha de Comando (`main.py`):**
+   Crie a função de ação `a_meu_novo_filtro()` e adicione uma entrada na lista `MENU`.
+4. **Exponha na Interface Gráfica (`gui.py`):**
+   - Adicione o método `a_meu_novo_filtro(self)` na classe `App`.
+   - Utilize `self._pedir_parametros()` com a lista de controles desejados (sliders, checkboxes ou comboboxes) para que os ajustes apareçam integrados ao painel lateral.
+   - Adicione o botão no dicionário de abas correspondente (`Básicas`, `Realce`, `Análise` ou `Segmentar`).
+
+### 3. Como Adicionar um Novo Estilo em `filtros.py`
+
+1. Em `filtros.py`, crie a função com a assinatura:
+   ```python
+   def estilo_exemplo(img):
+       # Utilize as funções de processamento ou OpenCV
+       return resultado
+   ```
+2. Adicione a tupla `("Nome do Estilo", estilo_exemplo)` à lista `TODOS` em `filtros.py`.
+3. A interface gráfica e os testes carregarão o novo estilo automaticamente!
+
+---
+
+## 💡 Ideias e Sugestões para Próximos Passos (Backlog)
+
+Caso o grupo deseje expandir o projeto além dos requisitos básicos, aqui estão algumas sugestões com alto valor agregado:
+
+- [ ] **Exportação de Relatórios de Chamada:** Gerar relatórios formatados em PDF ou Excel a partir do `chamada.csv`, com porcentagem de presença e gráficos.
+- [ ] **Estatísticas da Turma:** Dashboard na GUI mostrando frequência por aluno e horários de entrada.
+- [ ] **Feedback Sonoro na Chamada:** Emitir um bipe sonoro suave ao marcar a presença de um aluno pela câmera ao vivo.
+- [ ] **Classificador Facial Alternativo (Deep Learning):** Adicionar opção de utilizar embeddings com modelos baseados em redes neurais (ex.: MediaPipe FaceMesh ou FaceNet) como alternativa ao LBPH em cenários de iluminação desafiadora.
+- [ ] **Filtro de Olhos Fechados / Vivacidade (Liveness):** Evitar fraudes de chamada por foto estática usando detecção de piscadas.
+
+---
+
+## 📚 Tecnologias e Bibliotecas
+
+- **[Python](https://www.python.org/)** (v3.9+) – Linguagem principal.
+- **[OpenCV (opencv-contrib-python)](https://opencv.org/)** – Visão computacional, Haar Cascades e reconhecedor LBPH.
+- **[NumPy](https://numpy.org/)** – Operações matriciais e manipulação de tensores de imagem.
+- **[Pillow (PIL)](https://python-pillow.org/)** – Conversão de tensores OpenCV para exibição na interface gráfica.
+- **[Matplotlib](https://matplotlib.org/)** – Gráficos de distribuição e plotagem de histogramas.
+- **[Tkinter / ttk](https://docs.python.org/3/library/tkinter.html)** – Interface visual nativa multiplataforma.
+- **[pytest](https://docs.pytest.org/)** – Framework de testes automatizados e integração contínua.
