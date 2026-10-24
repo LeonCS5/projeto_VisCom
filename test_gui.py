@@ -119,3 +119,34 @@ def test_chamada_e_cadastro_pela_gui(app, monkeypatch):
     app.a_chamada()
     with open("chamada.csv", encoding="utf-8") as f:
         assert "ana" in f.read()
+
+
+def test_chamada_ao_vivo(app, monkeypatch):
+    """Câmera simulada: um 'aluno' aparece nos quadros e deve ser marcado presente."""
+    rng = np.random.default_rng(1)
+    rosto = {n: rng.integers(0, 256, (120, 120, 3), dtype=np.uint8) for n in ("ana", "bia")}
+    for nome, im in rosto.items():
+        os.makedirs(f"faces/{nome}")
+        for i in range(3):
+            cv2.imwrite(f"faces/{nome}/{i}.png", np.clip(im.astype(int) + i, 0, 255).astype(np.uint8))
+    monkeypatch.setattr(rf, "detectar_faces", lambda im, *a, **k: [(0, 0, im.shape[1], im.shape[0])])
+    rf.treinar()
+
+    class CamFalsa:
+        def read(self):
+            return True, rosto["bia"].copy()
+
+        def release(self):
+            pass
+
+    monkeypatch.setattr(rf, "abrir_camera", lambda i: CamFalsa())
+    com_respostas(monkeypatch, app, {"idx": 1, "conf": 3})
+    app.a_chamada_camera()
+    for _ in range(10):
+        app.update()
+        app.after(20)
+    assert app._ao_vivo
+    app._ao_vivo = None  # simula o encerramento
+    with open("chamada.csv", encoding="utf-8") as f:
+        linhas = f.read()
+    assert "bia" in linhas and "ana" not in linhas.split("aluno")[1]

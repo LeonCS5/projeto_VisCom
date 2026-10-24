@@ -294,6 +294,19 @@ def a_chamada():
     print("Registro em chamada.csv; imagens anotadas em chamada_anotada/")
 
 
+def a_chamada_camera():
+    idx = perguntar("Índice da câmera (DroidCam costuma ser 1 ou 2)", int, 0)
+    conf = perguntar("Quadros de reconhecimento para marcar presença", int, 5)
+    print("Janela aberta: tecle ESC nela para encerrar.")
+    try:
+        pres, aus = rf.chamada_camera(idx, confirmacoes=conf)
+    except (OSError, RuntimeError) as e:
+        print(e)
+        return
+    print("Presentes:", ", ".join(pres) or "-")
+    print("Ausentes: ", ", ".join(aus) or "-")
+
+
 MENU = [
     ("ENTRADA / SAÍDA", [
         ("Abrir imagem", abrir), ("Salvar resultado", salvar),
@@ -317,7 +330,8 @@ MENU = [
         ("Detectar faces", a_detectar_faces), ("Cadastrar aluno (fotos)", a_cadastrar),
         ("Treinar modelo (pasta faces/)", a_treinar),
         ("Reconhecer faces na imagem", a_reconhecer_imagem),
-        ("Chamada automática (fotos/vídeo)", a_chamada)]),
+        ("Chamada automática (fotos/vídeo)", a_chamada),
+        ("Chamada ao vivo (câmera)", a_chamada_camera)]),
 ]
 
 
@@ -343,7 +357,7 @@ def main():
             print("Opção inválida.")
             continue
         # tudo exceto abrir (1) e cadastro/treino/chamada exige imagem carregada
-        sem_imagem = {abrir, a_treinar, a_cadastrar, a_chamada}
+        sem_imagem = {abrir, a_treinar, a_cadastrar, a_chamada, a_chamada_camera}
         if fn not in sem_imagem and not exige_imagem():
             continue
         try:

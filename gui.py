@@ -196,7 +196,8 @@ class App(tk.Tk):
                 ("Cadastrar aluno (fotos)…", self.a_cadastrar, True),
                 ("Treinar modelo", self.a_treinar, True),
                 ("Reconhecer faces", self.a_reconhecer, False),
-                ("Chamada automática…", self.a_chamada, True)]),
+                ("Chamada automática…", self.a_chamada, True),
+                ("Chamada ao vivo (câmera)…", self.a_chamada_camera, True)]),
         ]
 
     # ---------- infraestrutura ----------
@@ -466,6 +467,53 @@ class App(tk.Tk):
             tv.insert("", "end", values=(n, "Ausente"), tags=("a",))
         tv.pack(fill="both", expand=True, padx=8, pady=8)
         ttk.Label(j, text="Registro gravado em chamada.csv; imagens em chamada_anotada/").pack(pady=(0, 8))
+
+    # ---------- chamada ao vivo ----------
+    def a_chamada_camera(self):
+        if getattr(self, "_ao_vivo", None):
+            messagebox.showinfo("Chamada", "Já existe uma chamada em andamento.")
+            return
+        r = self.pedir("Chamada ao vivo", [
+            ("idx", "Índice da câmera (DroidCam: tente 1 ou 2)", int, 0),
+            ("conf", "Quadros de reconhecimento p/ marcar presença", int, 5)])
+        if not r:
+            return
+        sessao = rf.SessaoChamada(confirmacoes=r["conf"])
+        cap = rf.abrir_camera(r["idx"])
+
+        painel = tk.Toplevel(self)
+        painel.title("Chamada ao vivo")
+        lista = tk.Listbox(painel, width=34, height=14)
+        lista.pack(fill="both", expand=True, padx=8, pady=8)
+        info = tk.StringVar()
+        ttk.Label(painel, textvariable=info).pack()
+        self._ao_vivo = True
+
+        def encerrar():
+            self._ao_vivo = None
+            cap.release()
+            painel.destroy()
+            self.status.set(f"Chamada encerrada. Presentes: {', '.join(sorted(sessao.presentes)) or '-'}  |  "
+                            f"Ausentes: {', '.join(sessao.ausentes) or '-'}. Registro em chamada.csv")
+
+        ttk.Button(painel, text="Encerrar chamada", command=encerrar).pack(pady=8)
+        painel.protocol("WM_DELETE_WINDOW", encerrar)
+
+        def passo():
+            if not self._ao_vivo:
+                return
+            ok, quadro = cap.read()
+            if ok:
+                vis, novos = sessao.processar(quadro)
+                self.p_orig.mostrar(quadro)
+                self.p_res.mostrar(vis)
+                for n in novos:
+                    lista.insert("end", f"✔ {n}")
+                info.set(f"Presentes: {len(sessao.presentes)}/{len(sessao.nomes)}")
+                self.status.set("Chamada ao vivo em andamento…")
+            self.after(15, passo)
+
+        passo()
 
 
 if __name__ == "__main__":

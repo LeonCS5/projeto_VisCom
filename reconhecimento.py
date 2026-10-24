@@ -173,23 +173,86 @@ def _quadros(fonte, passo_video=5):
             cap.release()
 
 
+class SessaoChamada:
+    """Estado de uma chamada: um aluno é marcado presente após ser reconhecido em
+    `confirmacoes` quadros (reduz falsos positivos). Cada presença nova é gravada
+    imediatamente no CSV (uma vez por aluno por dia)."""
+
+    def __init__(self, arquivo="chamada.csv", confirmacoes=1):
+        self.rec, self.nomes = _carregar()
+        self.arquivo, self.confirmacoes = arquivo, confirmacoes
+        self.contagem, self.presentes = {}, set()
+
+    def processar(self, quadro):
+        """Retorna (quadro anotado, lista de alunos que acabaram de ser marcados)."""
+        vis, achados = reconhecer(quadro, self.rec, self.nomes)
+        novos = []
+        for n in set(achados):
+            self.contagem[n] = self.contagem.get(n, 0) + 1
+            if self.contagem[n] >= self.confirmacoes and n not in self.presentes:
+                self.presentes.add(n)
+                novos.append(n)
+                _registrar_presenca({n}, self.arquivo)
+        return vis, novos
+
+    @property
+    def ausentes(self):
+        return sorted(set(self.nomes) - self.presentes)
+
+
+def abrir_camera(indice=0):
+    """Abre a câmera `indice` (DroidCam costuma aparecer como 1 ou 2). Levanta
+    RuntimeError, listando os índices que funcionam, se não abrir."""
+    def tentar(i):
+        cap = cv2.VideoCapture(i, cv2.CAP_DSHOW) if os.name == "nt" else cv2.VideoCapture(i)
+        if cap.isOpened() and cap.read()[0]:
+            return cap
+        cap.release()
+        return None
+
+    cap = tentar(indice)
+    if cap is None:
+        ok = []
+        for i in range(5):
+            outra = tentar(i) if i != indice else None
+            if outra is not None:
+                outra.release()
+                ok.append(i)
+        dica = f" Câmeras que responderam: {ok}." if ok else " Nenhuma câmera respondeu (o DroidCam está conectado?)."
+        raise RuntimeError(f"Não foi possível abrir a câmera {indice}.{dica}")
+    return cap
+
+
+def chamada_camera(indice=0, arquivo="chamada.csv", confirmacoes=5):
+    """Chamada ao vivo numa janela do OpenCV; ESC encerra. Retorna (presentes, ausentes)."""
+    sessao = SessaoChamada(arquivo, confirmacoes)
+    cap = abrir_camera(indice)
+    try:
+        while True:
+            ok, quadro = cap.read()
+            if not ok:
+                break
+            vis, _ = sessao.processar(quadro)
+            cv2.putText(vis, f"Presentes: {len(sessao.presentes)}/{len(sessao.nomes)} - ESC encerra",
+                        (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
+            cv2.imshow("Chamada", vis)
+            if cv2.waitKey(1) & 0xFF == 27:
+                break
+    finally:
+        cap.release()
+        cv2.destroyAllWindows()
+    return sorted(sessao.presentes), sessao.ausentes
+
+
 def chamada(fonte, arquivo="chamada.csv", confirmacoes=1, salvar_anotadas=None):
     """Chamada automática a partir de uma pasta de fotos, uma foto ou um vídeo.
-    Um aluno é marcado presente após ser reconhecido em `confirmacoes` quadros
-    (use valores maiores em vídeo para reduzir falsos positivos).
     Se `salvar_anotadas` for uma pasta, grava as imagens com os rostos marcados.
-    Grava o CSV e retorna (presentes, ausentes)."""
-    rec, nomes = _carregar()
-    contagem, presentes = {}, set()
+    Retorna (presentes, ausentes)."""
+    sessao = SessaoChamada(arquivo, confirmacoes)
     if salvar_anotadas:
         os.makedirs(salvar_anotadas, exist_ok=True)
     for i, quadro in enumerate(_quadros(fonte)):
-        vis, achados = reconhecer(quadro, rec, nomes)
-        for n in set(achados):
-            contagem[n] = contagem.get(n, 0) + 1
-            if contagem[n] >= confirmacoes:
-                presentes.add(n)
+        vis, _ = sessao.processar(quadro)
         if salvar_anotadas:
             cv2.imwrite(os.path.join(salvar_anotadas, f"{i:04d}.jpg"), vis)
-    _registrar_presenca(presentes, arquivo)
-    return sorted(presentes), sorted(set(nomes) - presentes)
+    return sorted(sessao.presentes), sessao.ausentes
