@@ -1,0 +1,8 @@
+faces/
+modelo_lbph.yml
+rotulos.txt
+chamada.csv
+chamada_anotada/
+__pycache__/
+.pytest_cache/
+saida.png

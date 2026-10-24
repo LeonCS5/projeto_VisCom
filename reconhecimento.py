@@ -14,6 +14,7 @@ PASTA_FACES = "faces"
 MODELO = "modelo_lbph.yml"
 ROTULOS = "rotulos.txt"
 TAM_FACE = (200, 200)
+EXT_IMAGEM = (".jpg", ".jpeg", ".png", ".bmp")
 # Quanto MENOR a confiança do LBPH, melhor o casamento. Acima disso = "desconhecido".
 LIMIAR_CONFIANCA = 80.0
 
@@ -103,34 +104,24 @@ def reconhecer(img, rec=None, nomes=None):
     return saida, achados
 
 
-def cadastrar_pela_webcam(nome, quantidade=15, camera=0):
-    """Captura `quantidade` fotos com rosto detectado (tecle ESPAÇO a cada captura, ESC sai)."""
+def cadastrar_de_fotos(nome, origem):
+    """Copia as fotos de `origem` (pasta ou arquivo) para faces/<nome>/, mantendo só
+    as que têm exatamente um rosto detectado. Retorna (aceitas, rejeitadas)."""
     pasta = os.path.join(PASTA_FACES, nome)
     os.makedirs(pasta, exist_ok=True)
-    cap = cv2.VideoCapture(camera)
-    if not cap.isOpened():
-        raise RuntimeError("Não foi possível abrir a webcam.")
-    salvas = len(os.listdir(pasta))
-    meta = salvas + quantidade
-    try:
-        while salvas < meta:
-            ok, quadro = cap.read()
-            if not ok:
-                break
-            vis, n = desenhar_deteccoes(quadro)
-            cv2.putText(vis, f"{nome}: {salvas}/{meta} - ESPACO captura, ESC sai",
-                        (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
-            cv2.imshow("Cadastro", vis)
-            tecla = cv2.waitKey(1) & 0xFF
-            if tecla == 27:
-                break
-            if tecla == 32 and n == 1:
-                cv2.imwrite(os.path.join(pasta, f"{datetime.now():%Y%m%d_%H%M%S_%f}.jpg"), quadro)
-                salvas += 1
-    finally:
-        cap.release()
-        cv2.destroyAllWindows()
-    return salvas
+    if os.path.isdir(origem):
+        arquivos = [os.path.join(origem, a) for a in sorted(os.listdir(origem))]
+    else:
+        arquivos = [origem]
+    aceitas = rejeitadas = 0
+    for arq in arquivos:
+        im = cv2.imread(arq) if arq.lower().endswith(EXT_IMAGEM) else None
+        if im is not None and len(detectar_faces(im)) == 1:
+            cv2.imwrite(os.path.join(pasta, f"{len(os.listdir(pasta)):04d}.jpg"), im)
+            aceitas += 1
+        else:
+            rejeitadas += 1
+    return aceitas, rejeitadas
 
 
 def _registrar_presenca(presentes, arquivo):
@@ -151,32 +142,54 @@ def _registrar_presenca(presentes, arquivo):
     return novos
 
 
-def chamada_webcam(arquivo="chamada.csv", camera=0, confirmacoes=5):
-    """Chamada automática: um aluno é marcado presente após `confirmacoes` quadros
-    reconhecidos (reduz falsos positivos). ESC encerra e grava o CSV.
-    Retorna (presentes, ausentes)."""
+def _quadros(fonte, passo_video=5):
+    """Gera quadros BGR de uma pasta de imagens, de um arquivo de vídeo ou de uma
+    única imagem. Em vídeo usa 1 a cada `passo_video` quadros."""
+    if os.path.isdir(fonte):
+        for arq in sorted(os.listdir(fonte)):
+            if arq.lower().endswith(EXT_IMAGEM):
+                im = cv2.imread(os.path.join(fonte, arq))
+                if im is not None:
+                    yield im
+    elif fonte.lower().endswith(EXT_IMAGEM):
+        im = cv2.imread(fonte)
+        if im is None:
+            raise FileNotFoundError(f"Não foi possível abrir '{fonte}'.")
+        yield im
+    else:
+        cap = cv2.VideoCapture(fonte)
+        if not cap.isOpened():
+            raise FileNotFoundError(f"Não foi possível abrir '{fonte}'.")
+        try:
+            i = 0
+            while True:
+                ok, quadro = cap.read()
+                if not ok:
+                    break
+                if i % passo_video == 0:
+                    yield quadro
+                i += 1
+        finally:
+            cap.release()
+
+
+def chamada(fonte, arquivo="chamada.csv", confirmacoes=1, salvar_anotadas=None):
+    """Chamada automática a partir de uma pasta de fotos, uma foto ou um vídeo.
+    Um aluno é marcado presente após ser reconhecido em `confirmacoes` quadros
+    (use valores maiores em vídeo para reduzir falsos positivos).
+    Se `salvar_anotadas` for uma pasta, grava as imagens com os rostos marcados.
+    Grava o CSV e retorna (presentes, ausentes)."""
     rec, nomes = _carregar()
-    cap = cv2.VideoCapture(camera)
-    if not cap.isOpened():
-        raise RuntimeError("Não foi possível abrir a webcam.")
     contagem, presentes = {}, set()
-    try:
-        while True:
-            ok, quadro = cap.read()
-            if not ok:
-                break
-            vis, achados = reconhecer(quadro, rec, nomes)
-            for n in set(achados):
-                contagem[n] = contagem.get(n, 0) + 1
-                if contagem[n] >= confirmacoes:
-                    presentes.add(n)
-            cv2.putText(vis, f"Presentes: {len(presentes)}/{len(nomes)} - ESC encerra",
-                        (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
-            cv2.imshow("Chamada", vis)
-            if cv2.waitKey(1) & 0xFF == 27:
-                break
-    finally:
-        cap.release()
-        cv2.destroyAllWindows()
+    if salvar_anotadas:
+        os.makedirs(salvar_anotadas, exist_ok=True)
+    for i, quadro in enumerate(_quadros(fonte)):
+        vis, achados = reconhecer(quadro, rec, nomes)
+        for n in set(achados):
+            contagem[n] = contagem.get(n, 0) + 1
+            if contagem[n] >= confirmacoes:
+                presentes.add(n)
+        if salvar_anotadas:
+            cv2.imwrite(os.path.join(salvar_anotadas, f"{i:04d}.jpg"), vis)
     _registrar_presenca(presentes, arquivo)
     return sorted(presentes), sorted(set(nomes) - presentes)

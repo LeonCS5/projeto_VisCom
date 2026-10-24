@@ -1,3 +1,4 @@
-opencv-contrib-python
+opencv-contrib-python<5
 numpy
 matplotlib
+pytest

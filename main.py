@@ -101,21 +101,24 @@ def a_inverter():
 
 
 def a_brilho():
+    img = base()
     c = perguntar("Contraste (1.0 = igual)", float, 1.2)
     b = perguntar("Brilho (-255..255)", int, 30)
-    aplicar(p.brilho_contraste(base(), c, b), "Brilho/contraste")
+    aplicar(p.brilho_contraste(img, c, b), "Brilho/contraste")
 
 
 def a_somar():
+    img = base()
     o = ler_outra()
     if o is not None:
-        aplicar(p.somar(base(), o, perguntar("Peso da segunda (0..1)", float, 0.5)), "Soma")
+        aplicar(p.somar(img, o, perguntar("Peso da segunda (0..1)", float, 0.5)), "Soma")
 
 
 def a_subtrair():
+    img = base()
     o = ler_outra()
     if o is not None:
-        aplicar(p.subtrair(base(), o), "Subtração (|A-B|)")
+        aplicar(p.subtrair(img, o), "Subtração (|A-B|)")
 
 
 def a_cinza():
@@ -156,24 +159,29 @@ def a_recortar():
 
 
 def a_media():
-    aplicar(p.filtro_media(base(), perguntar("Tamanho do kernel", int, 5)), "Média")
+    img = base()
+    aplicar(p.filtro_media(img, perguntar("Tamanho do kernel", int, 5)), "Média")
 
 
 def a_mediana():
-    aplicar(p.filtro_mediana(base(), perguntar("Tamanho do kernel", int, 5)), "Mediana")
+    img = base()
+    aplicar(p.filtro_mediana(img, perguntar("Tamanho do kernel", int, 5)), "Mediana")
 
 
 def a_gauss():
-    aplicar(p.filtro_gaussiano(base(), perguntar("Tamanho do kernel", int, 5),
+    img = base()
+    aplicar(p.filtro_gaussiano(img, perguntar("Tamanho do kernel", int, 5),
                                perguntar("Sigma (0 = automático)", float, 0)), "Gaussiano")
 
 
 def a_sobel():
-    aplicar(p.sobel(base(), perguntar("Kernel (1,3,5,7)", int, 3)), "Sobel")
+    img = base()
+    aplicar(p.sobel(img, perguntar("Kernel (1,3,5,7)", int, 3)), "Sobel")
 
 
 def a_canny():
-    aplicar(p.canny(base(), perguntar("Limiar inferior", int, 100),
+    img = base()
+    aplicar(p.canny(img, perguntar("Limiar inferior", int, 100),
                     perguntar("Limiar superior", int, 200)), "Canny")
 
 
@@ -198,16 +206,18 @@ def a_canais():
 
 
 def a_binarizar():
+    img = base()
     m = perguntar("Método (fixo/adaptativo/otsu)", str, "otsu")
     if m == "fixo":
-        out = p.binarizar(base(), "fixo", limiar=perguntar("Limiar", int, 127))
+        out = p.binarizar(img, "fixo", limiar=perguntar("Limiar", int, 127))
     else:
-        out = p.binarizar(base(), m)
+        out = p.binarizar(img, m)
     aplicar(out, f"Binarização ({m})")
 
 
 def a_quantizar():
-    aplicar(p.quantizar(base(), perguntar("Número de níveis (2..256)", int, 4)), "Quantização")
+    img = base()
+    aplicar(p.quantizar(img, perguntar("Número de níveis (2..256)", int, 4)), "Quantização")
 
 
 def a_regioes():
@@ -253,12 +263,12 @@ def a_treinar():
 
 
 def a_cadastrar():
-    nome = perguntar("Nome do aluno (sem espaços extras)").replace(" ", "_")
-    try:
-        n = rf.cadastrar_pela_webcam(nome, perguntar("Fotos a capturar", int, 15))
-        print(f"{n} foto(s) em faces/{nome}. Lembre-se de treinar o modelo.")
-    except RuntimeError as e:
-        print(e)
+    nome = perguntar("Nome do aluno").strip().replace(" ", "_")
+    origem = perguntar("Foto ou pasta com fotos do aluno (1 rosto por foto)")
+    ok, ruim = rf.cadastrar_de_fotos(nome, origem)
+    print(f"{ok} foto(s) aceita(s) em faces/{nome}; {ruim} rejeitada(s) (sem rosto, vários rostos ou ilegível).")
+    if ok:
+        print("Lembre-se de treinar o modelo.")
 
 
 def a_reconhecer_imagem():
@@ -272,14 +282,16 @@ def a_reconhecer_imagem():
 
 
 def a_chamada():
+    fonte = perguntar("Foto, pasta de fotos ou vídeo da turma")
+    conf = perguntar("Reconhecimentos necessários para marcar presença", int, 1)
     try:
-        pres, aus = rf.chamada_webcam()
+        pres, aus = rf.chamada(fonte, confirmacoes=conf, salvar_anotadas="chamada_anotada")
     except (OSError, RuntimeError) as e:
         print(e)
         return
     print("Presentes:", ", ".join(pres) or "-")
     print("Ausentes: ", ", ".join(aus) or "-")
-    print("Registro gravado em chamada.csv")
+    print("Registro em chamada.csv; imagens anotadas em chamada_anotada/")
 
 
 MENU = [
@@ -302,10 +314,10 @@ MENU = [
         ("Crescimento de regiões", a_regioes),
         ("Morfologia (erosão/dilatação/abertura/fechamento)", a_morfologia)]),
     ("RECONHECIMENTO FACIAL", [
-        ("Detectar faces", a_detectar_faces), ("Cadastrar aluno (webcam)", a_cadastrar),
+        ("Detectar faces", a_detectar_faces), ("Cadastrar aluno (fotos)", a_cadastrar),
         ("Treinar modelo (pasta faces/)", a_treinar),
         ("Reconhecer faces na imagem", a_reconhecer_imagem),
-        ("Chamada automática (webcam)", a_chamada)]),
+        ("Chamada automática (fotos/vídeo)", a_chamada)]),
 ]
 
 
@@ -330,7 +342,7 @@ def main():
         if fn is None:
             print("Opção inválida.")
             continue
-        # tudo exceto abrir (1) e ações de webcam/treino exige imagem carregada
+        # tudo exceto abrir (1) e cadastro/treino/chamada exige imagem carregada
         sem_imagem = {abrir, a_treinar, a_cadastrar, a_chamada}
         if fn not in sem_imagem and not exige_imagem():
             continue
