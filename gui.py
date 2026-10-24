@@ -474,7 +474,7 @@ class App(tk.Tk):
             messagebox.showinfo("Chamada", "Já existe uma chamada em andamento.")
             return
         r = self.pedir("Chamada ao vivo", [
-            ("idx", "Índice da câmera (DroidCam: tente 1 ou 2)", int, 0),
+            ("idx", "Câmera: índice (0, 1…) ou IP do celular", str, "192.168.18.4"),
             ("conf", "Quadros de reconhecimento p/ marcar presença", int, 5)])
         if not r:
             return

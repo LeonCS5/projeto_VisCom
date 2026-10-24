@@ -140,7 +140,7 @@ def test_chamada_ao_vivo(app, monkeypatch):
             pass
 
     monkeypatch.setattr(rf, "abrir_camera", lambda i: CamFalsa())
-    com_respostas(monkeypatch, app, {"idx": 1, "conf": 3})
+    com_respostas(monkeypatch, app, {"idx": "1", "conf": 3})
     app.a_chamada_camera()
     for _ in range(10):
         app.update()

@@ -200,33 +200,54 @@ class SessaoChamada:
         return sorted(set(self.nomes) - self.presentes)
 
 
-def abrir_camera(indice=0):
-    """Abre a câmera `indice` (DroidCam costuma aparecer como 1 ou 2). Levanta
-    RuntimeError, listando os índices que funcionam, se não abrir."""
-    def tentar(i):
-        cap = cv2.VideoCapture(i, cv2.CAP_DSHOW) if os.name == "nt" else cv2.VideoCapture(i)
+def _fonte_camera(fonte):
+    """Índice ('0', '1'...), URL completa, ou só o IP do celular (DroidCam, porta 4747)."""
+    fonte = str(fonte).strip()
+    if fonte.isdigit():
+        return int(fonte)
+    if "://" not in fonte:
+        host = fonte if ":" in fonte else fonte + ":4747"
+        return f"http://{host}/video"
+    return fonte
+
+
+def abrir_camera(fonte=0):
+    """Abre a câmera. `fonte`: índice (webcam/DroidCam USB), IP do celular
+    (ex.: '192.168.18.4') ou URL do stream. Levanta RuntimeError se não abrir."""
+    alvo = _fonte_camera(fonte)
+
+    def tentar(x):
+        if isinstance(x, int):
+            cap = cv2.VideoCapture(x, cv2.CAP_DSHOW) if os.name == "nt" else cv2.VideoCapture(x)
+        else:
+            cap = cv2.VideoCapture(x)
         if cap.isOpened() and cap.read()[0]:
             return cap
         cap.release()
         return None
 
-    cap = tentar(indice)
-    if cap is None:
-        ok = []
-        for i in range(5):
-            outra = tentar(i) if i != indice else None
-            if outra is not None:
-                outra.release()
-                ok.append(i)
-        dica = f" Câmeras que responderam: {ok}." if ok else " Nenhuma câmera respondeu (o DroidCam está conectado?)."
-        raise RuntimeError(f"Não foi possível abrir a câmera {indice}.{dica}")
-    return cap
+    cap = tentar(alvo)
+    if cap is not None:
+        return cap
+    if isinstance(alvo, str):
+        raise RuntimeError(
+            f"Não foi possível receber vídeo de {alvo}.\n"
+            "No celular: deixe o app DroidCam aberto na tela inicial (câmera funcionando, "
+            "sem minimizar) e confira se o PC está na mesma rede Wi-Fi.")
+    ok = []
+    for i in range(5):
+        outra = tentar(i) if i != alvo else None
+        if outra is not None:
+            outra.release()
+            ok.append(i)
+    dica = f" Câmeras que responderam: {ok}." if ok else " Nenhuma câmera respondeu (o DroidCam está conectado?)."
+    raise RuntimeError(f"Não foi possível abrir a câmera {alvo}.{dica}")
 
 
-def chamada_camera(indice=0, arquivo="chamada.csv", confirmacoes=5):
+def chamada_camera(fonte=0, arquivo="chamada.csv", confirmacoes=5):
     """Chamada ao vivo numa janela do OpenCV; ESC encerra. Retorna (presentes, ausentes)."""
     sessao = SessaoChamada(arquivo, confirmacoes)
-    cap = abrir_camera(indice)
+    cap = abrir_camera(fonte)
     try:
         while True:
             ok, quadro = cap.read()
