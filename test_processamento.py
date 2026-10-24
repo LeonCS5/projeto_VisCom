@@ -157,3 +157,33 @@ def test_lbph_treina_e_reconhece(tmp_path, monkeypatch):
     assert nomes == ["ana", "bia"] and qtd == 6
     _, achados = rf.reconhecer(cv2.cvtColor(base["bia"], cv2.COLOR_GRAY2BGR))
     assert achados == ["bia"]
+
+
+def test_saturacao_nitidez(img):
+    assert p.saturacao(img, 0).std(axis=2).max() <= 1  # sem saturação = cinza
+    assert p.saturacao(img, 1.5).shape == img.shape
+    assert np.array_equal(p.nitidez(img, 0.0), img)
+    assert p.nitidez(img, 1.0).shape == img.shape
+
+
+def test_rotacionar_espelhar(img):
+    assert p.rotacionar(img, 0).shape == img.shape
+    assert p.rotacionar(img, 90).shape[:2] == (120, 80)
+    assert p.rotacionar(img, 45, expandir=False).shape == img.shape
+    assert np.array_equal(p.espelhar(p.espelhar(img, "horizontal"), "horizontal"), img)
+    assert np.array_equal(p.espelhar(img, "ambos"), p.espelhar(p.espelhar(img, "vertical"), "horizontal"))
+
+
+def test_deteccoes_de_formas():
+    im = np.zeros((200, 200, 3), np.uint8)
+    cv2.circle(im, (100, 100), 50, (255, 255, 255), -1)
+    out, n = p.contornos(im)
+    assert out.shape == im.shape and n >= 1
+    out, n = p.circulos(im, 20, 30, 80)
+    assert n >= 1
+    quadro = np.zeros((200, 200, 3), np.uint8)
+    cv2.rectangle(quadro, (40, 40), (160, 160), (255, 255, 255), 3)
+    assert p.linhas(quadro, 50, 40, 5)[1] >= 4
+    assert p.cantos(quadro, 20, 0.05)[1] >= 4
+    assert p.contornos(np.zeros((50, 50, 3), np.uint8))[1] == 0
+    assert p.cantos(np.zeros((50, 50, 3), np.uint8))[1] == 0

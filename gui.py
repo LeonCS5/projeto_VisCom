@@ -30,77 +30,166 @@ def gravar_imagem(caminho, img):
     return ok
 
 
-class Dialogo(tk.Toplevel):
-    """Janela modal de parâmetros. `campos`: lista de (chave, rótulo, tipo, padrão[, opções]);
-    tipo em {int, float, str, bool, 'opcao', 'arquivo', 'pasta', 'caminho'}."""
+class Formulario(ttk.Frame):
+    """Formulário de parâmetros que fica dentro do painel lateral (sem janela nova).
 
-    def __init__(self, pai, titulo, campos):
+    `campos`: lista de (chave, rótulo, tipo, padrão[, extra]).
+      - int/float com extra=(mín, máx[, passo])  -> barra deslizante + caixa numérica
+      - int/float sem extra / str                 -> caixa de texto
+      - bool                                      -> caixa de seleção
+      - 'opcao' com extra=[opções]                -> lista de escolha
+      - 'arquivo' | 'pasta' | 'caminho'           -> caixa + botões de procurar
+    `ao_mudar` é chamado a cada alteração (para a prévia ao vivo)."""
+
+    def __init__(self, pai, titulo, campos, ao_mudar=None):
         super().__init__(pai)
-        self.title(titulo)
-        self.transient(pai)
-        self.resizable(False, False)
-        self.resultado = None
         self.campos = campos
-        self.vars = {}
-        corpo = ttk.Frame(self, padding=12)
-        corpo.pack()
-        for i, c in enumerate(campos):
-            chave, rotulo, tipo, padrao = c[:4]
-            ttk.Label(corpo, text=rotulo).grid(row=i, column=0, sticky="w", pady=3, padx=(0, 10))
-            if tipo is bool:
-                v = tk.BooleanVar(value=padrao)
-                ttk.Checkbutton(corpo, variable=v).grid(row=i, column=1, sticky="w")
-            elif tipo == "opcao":
-                v = tk.StringVar(value=padrao)
-                ttk.Combobox(corpo, textvariable=v, values=c[4], state="readonly",
-                             width=24).grid(row=i, column=1, sticky="w")
-            elif tipo in ("arquivo", "pasta", "caminho"):
-                v = tk.StringVar(value=padrao)
-                linha = ttk.Frame(corpo)
-                linha.grid(row=i, column=1, sticky="w")
-                ttk.Entry(linha, textvariable=v, width=34).pack(side="left")
-                if tipo in ("arquivo", "caminho"):
-                    ttk.Button(linha, text="Arquivo…", command=lambda v=v: self._escolher(v, False)
-                               ).pack(side="left", padx=2)
-                if tipo in ("pasta", "caminho"):
-                    ttk.Button(linha, text="Pasta…", command=lambda v=v: self._escolher(v, True)
-                               ).pack(side="left")
-            else:
-                v = tk.StringVar(value=str(padrao))
-                ttk.Entry(corpo, textvariable=v, width=14).grid(row=i, column=1, sticky="w")
-            self.vars[chave] = v
-        botoes = ttk.Frame(corpo)
-        botoes.grid(row=len(campos), column=0, columnspan=2, pady=(10, 0), sticky="e")
-        ttk.Button(botoes, text="OK", command=self._ok).pack(side="left", padx=4)
-        ttk.Button(botoes, text="Cancelar", command=self.destroy).pack(side="left")
-        self.bind("<Return>", lambda e: self._ok())
-        self.bind("<Escape>", lambda e: self.destroy())
-        self.update_idletasks()
-        try:
-            self.grab_set()
-        except tk.TclError:  # janela ainda não mapeada (ex.: janela principal oculta)
-            pass
-        self.focus_set()
+        self.ao_mudar = ao_mudar or (lambda: None)
+        self.resultado = None
+        self.concluido = tk.IntVar(value=0)
+        self._leitores = {}
+        self._setters = {}
+        self._repor = []
+        ttk.Label(self, text=titulo, style="Titulo.TLabel").pack(anchor="w", pady=(0, 4))
+        for c in campos:
+            linha = ttk.Frame(self)
+            linha.pack(fill="x", pady=2)
+            self._campo(linha, *c[:4], c[4] if len(c) > 4 else None)
+        botoes = ttk.Frame(self)
+        botoes.pack(fill="x", pady=(8, 0))
+        ttk.Button(botoes, text="✔ Aplicar", style="Destaque.TButton", command=self._ok
+                   ).pack(side="left", expand=True, fill="x", padx=(0, 3))
+        ttk.Button(botoes, text="↺", width=3, command=self._padrao).pack(side="left", padx=3)
+        ttk.Button(botoes, text="✖ Cancelar", command=self._cancelar
+                   ).pack(side="left", expand=True, fill="x", padx=(3, 0))
 
-    def _escolher(self, var, pasta):
-        r = filedialog.askdirectory(parent=self) if pasta else \
-            filedialog.askopenfilename(parent=self, filetypes=FILTROS_IMG + [("Vídeo", "*.mp4 *.avi *.mov *.mkv")])
+    # ----- construção dos campos -----
+    def _campo(self, linha, chave, rotulo, tipo, padrao, extra):
+        if tipo in (int, float) and extra:
+            self._slider(linha, chave, rotulo, tipo, padrao, extra)
+        elif tipo is bool:
+            v = tk.BooleanVar(value=padrao)
+            ttk.Checkbutton(linha, text=rotulo, variable=v, command=self.ao_mudar).pack(anchor="w")
+            self._leitores[chave] = v.get
+            self._setters[chave] = v.set
+            self._repor.append(lambda v=v, p=padrao: v.set(p))
+        elif tipo == "opcao":
+            ttk.Label(linha, text=rotulo).pack(side="left")
+            v = tk.StringVar(value=padrao)
+            cb = ttk.Combobox(linha, textvariable=v, values=extra, state="readonly", width=16)
+            cb.pack(side="right")
+            cb.bind("<<ComboboxSelected>>", lambda e: self.ao_mudar())
+            self._leitores[chave] = v.get
+            self._setters[chave] = v.set
+            self._repor.append(lambda v=v, p=padrao: v.set(p))
+        elif tipo in ("arquivo", "pasta", "caminho"):
+            ttk.Label(linha, text=rotulo).pack(anchor="w")
+            v = tk.StringVar(value=padrao)
+            ttk.Entry(linha, textvariable=v).pack(fill="x")
+            bt = ttk.Frame(linha)
+            bt.pack(anchor="w", pady=2)
+            if tipo in ("arquivo", "caminho"):
+                ttk.Button(bt, text="Arquivo…", command=lambda v=v: self._procurar(v, False)).pack(side="left")
+            if tipo in ("pasta", "caminho"):
+                ttk.Button(bt, text="Pasta…", command=lambda v=v: self._procurar(v, True)).pack(side="left", padx=4)
+            self._leitores[chave] = v.get
+            self._setters[chave] = v.set
+            self._repor.append(lambda v=v, p=padrao: v.set(p))
+        else:
+            ttk.Label(linha, text=rotulo).pack(side="left")
+            v = tk.StringVar(value=str(padrao))
+            ttk.Entry(linha, textvariable=v, width=14).pack(side="right")
+            self._leitores[chave] = lambda v=v, t=tipo, r=rotulo: self._converter(v.get(), t, r)
+            self._setters[chave] = v.set
+            self._repor.append(lambda v=v, p=padrao: v.set(str(p)))
+
+    def _slider(self, linha, chave, rotulo, tipo, padrao, extra):
+        minimo, maximo = extra[0], extra[1]
+        passo = extra[2] if len(extra) > 2 else (1 if tipo is int else 0.1)
+        casas = 0 if tipo is int else max(0, -int(np.floor(np.log10(passo))))
+        estado = {"x": float(padrao), "trava": False}
+
+        def ajustar(x):
+            x = minimo + round((x - minimo) / passo) * passo
+            return round(min(maximo, max(minimo, x)), 6)
+
+        def texto(x):
+            return f"{x:.{casas}f}"
+
+        topo = ttk.Frame(linha)
+        topo.pack(fill="x")
+        ttk.Label(topo, text=rotulo).pack(side="left")
+        sv = tk.StringVar(value=texto(padrao))
+        caixa = ttk.Spinbox(topo, from_=minimo, to=maximo, increment=passo, textvariable=sv, width=7)
+        caixa.pack(side="right")
+        escala = ttk.Scale(linha, from_=minimo, to=maximo)
+        escala.set(padrao)
+        escala.pack(fill="x")
+
+        def definir(x, origem_escala):
+            x = ajustar(x)
+            if x == estado["x"]:
+                sv.set(texto(x))
+                return
+            estado["x"] = x
+            sv.set(texto(x))
+            estado["trava"] = True
+            escala.set(x)
+            estado["trava"] = False
+            self.ao_mudar()
+
+        escala.configure(command=lambda v: None if estado["trava"] else definir(float(v), True))
+
+        def da_caixa(_e=None):
+            try:
+                definir(float(sv.get().replace(",", ".")), False)
+            except ValueError:
+                sv.set(texto(estado["x"]))
+
+        for ev in ("<Return>", "<FocusOut>", "<<Increment>>", "<<Decrement>>"):
+            caixa.bind(ev, lambda e: self.after_idle(da_caixa))
+        self._leitores[chave] = lambda: int(round(estado["x"])) if tipo is int else estado["x"]
+        self._setters[chave] = lambda x: definir(x, False)
+        self._repor.append(lambda p=padrao: definir(p, False))
+
+    # ----- ações -----
+    @staticmethod
+    def _converter(bruto, tipo, rotulo):
+        try:
+            return bruto if tipo is str else tipo(bruto.replace(",", "."))
+        except ValueError:
+            raise ValueError(f"Valor inválido em '{rotulo}'.")
+
+    def _procurar(self, var, pasta):
+        r = filedialog.askdirectory() if pasta else filedialog.askopenfilename(
+            filetypes=FILTROS_IMG + [("Vídeo", "*.mp4 *.avi *.mov *.mkv")])
         if r:
             var.set(r)
 
+    def definir(self, chave, valor):
+        """Altera um campo por código (equivale ao usuário mexer no controle)."""
+        self._setters[chave](valor)
+        self.ao_mudar()
+
+    def valores(self):
+        return {chave: leitor() for chave, leitor in self._leitores.items()}
+
     def _ok(self):
-        saida = {}
-        for c in self.campos:
-            chave, rotulo, tipo = c[:3]
-            bruto = self.vars[chave].get()
-            try:
-                saida[chave] = bruto if tipo in ("opcao", "arquivo", "pasta", "caminho", str) \
-                    else (bool(bruto) if tipo is bool else tipo(bruto))
-            except ValueError:
-                messagebox.showerror("Valor inválido", f"Campo '{rotulo}' inválido.", parent=self)
-                return
-        self.resultado = saida
-        self.destroy()
+        try:
+            self.resultado = self.valores()
+        except ValueError as e:
+            messagebox.showerror("Valor inválido", str(e))
+            return
+        self.concluido.set(1)
+
+    def _cancelar(self):
+        self.resultado = None
+        self.concluido.set(1)
+
+    def _padrao(self):
+        for f in self._repor:
+            f()
+        self.ao_mudar()
 
 
 class Tooltip:
@@ -186,13 +275,16 @@ class App(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("VisCom – Processamento de Imagens")
-        self.geometry("1320x780")
+        self.geometry("1320x840")
         self.minsize(960, 600)
         self.orig = self.res = None
         self.caminho = None
         self.historico = []
         self.filtro_atual = None
         self._miniaturas = []
+        self._host = None  # painel de ajustes onde os formulários aparecem
+        self._pedindo = False
+        self._titulo_res = "Processada"
         self.encadear = tk.BooleanVar(value=False)
         self.intensidade = tk.DoubleVar(value=100)
         self.status = tk.StringVar(value="Bem-vindo! Abra uma imagem (Ctrl+O) para começar.")
@@ -205,6 +297,8 @@ class App(tk.Tk):
         s.configure(".", font=("Segoe UI", 10))
         s.configure("TButton", padding=(8, 5))
         s.configure("Acao.TButton", padding=(10, 8))
+        s.configure("Ferramenta.TButton", padding=(4, 5))
+        s.configure("Destaque.TButton", padding=(6, 5), font=("Segoe UI", 10, "bold"))
         s.configure("Filtro.TButton", padding=2, font=("Segoe UI", 9))
         s.configure("Titulo.TLabel", font=("Segoe UI", 11, "bold"))
 
@@ -251,14 +345,9 @@ class App(tk.Tk):
 
         nb = ttk.Notebook(corpo, width=375)
         corpo.add(nb, weight=0)
-        nb.add(self._aba_estilos(nb), text="✨ Estilos")
         for secao, itens in self._menu():
-            aba = ttk.Frame(nb, padding=8)
-            nb.add(aba, text=secao)
-            for rotulo, fn, livre, dica in itens:
-                b = ttk.Button(aba, text=rotulo, command=lambda f=fn, l=livre: self._executar(f, l))
-                b.pack(fill="x", pady=3)
-                Tooltip(b, dica)
+            nb.add(self._aba_ferramentas(nb, itens), text=secao)
+        nb.add(self._aba_estilos(nb), text="✨ Estilos")
 
         imagens = ttk.Frame(corpo)
         corpo.add(imagens, weight=1)
@@ -274,6 +363,29 @@ class App(tk.Tk):
 
         ttk.Label(self, textvariable=self.status, relief="sunken", anchor="w", padding=4
                   ).pack(fill="x", side="bottom")
+
+    def _aba_ferramentas(self, pai, itens):
+        """Aba com os botões das ferramentas (2 colunas) e, embaixo, a área de ajustes."""
+        aba = ttk.Frame(pai, padding=8)
+        botoes = ttk.Frame(aba)
+        botoes.pack(fill="x")
+        botoes.columnconfigure((0, 1), weight=1, uniform="b")
+        ajustes = ttk.LabelFrame(aba, text="Ajustes", padding=8)
+        ajustes.pack(fill="both", expand=True, pady=(10, 0))
+        self._placeholder(ajustes)
+        for i, (rotulo, fn, livre, dica) in enumerate(itens):
+            b = ttk.Button(botoes, text=rotulo, style="Ferramenta.TButton",
+                           command=lambda f=fn, l=livre, h=ajustes: self._executar(f, l, h))
+            b.grid(row=i // 2, column=i % 2, sticky="ew", padx=2, pady=2)
+            Tooltip(b, dica)
+        if self._host is None:
+            self._host = ajustes
+        return aba
+
+    @staticmethod
+    def _placeholder(host):
+        ttk.Label(host, text="Escolha uma ferramenta acima.\nOs ajustes aparecem aqui.",
+                  foreground="#888", justify="center").pack(expand=True, pady=20)
 
     def _aba_estilos(self, pai):
         aba = ttk.Frame(pai, padding=6)
@@ -335,42 +447,55 @@ class App(tk.Tk):
         return [
             ("Básico", [
                 ("Inverter cores", self.a_inverter, False, "Gera o negativo da imagem."),
-                ("Brilho e contraste", self.a_brilho, False, "Deixa a imagem mais clara/escura ou com mais/menos contraste."),
-                ("Somar imagens", self.a_somar, False, "Mistura esta imagem com outra (escolha o quanto de cada)."),
-                ("Subtrair imagens", self.a_subtrair, False, "Mostra a diferença entre esta imagem e outra."),
+                ("Brilho/contraste", self.a_brilho, False, "Deixa a imagem mais clara/escura ou com mais/menos contraste."),
+                ("Saturação", self.a_saturacao, False, "Intensifica ou apaga as cores."),
                 ("Níveis de cinza", self.a_cinza, False, "Converte para preto e branco."),
                 ("RGB ⇄ HSV", self.a_hsv, False, "Converte entre os modelos de cor e mostra os canais H, S e V."),
+                ("Somar imagens", self.a_somar, False, "Mistura esta imagem com outra (escolha o quanto de cada)."),
+                ("Subtrair imagens", self.a_subtrair, False, "Mostra a diferença entre esta imagem e outra."),
                 ("Redimensionar", self.a_redimensionar, False, "Muda o tamanho da imagem, por escala ou em pixels."),
-                ("Recortar região (ROI)", self.a_recortar, False, "Arraste o mouse sobre a área que deseja manter.")]),
+                ("Recortar (ROI)", self.a_recortar, False, "Escolhe a região a manter, por barras ou arrastando o mouse."),
+                ("Rotacionar", self.a_rotacionar, False, "Gira a imagem em qualquer ângulo."),
+                ("Espelhar", self.a_espelhar, False, "Inverte a imagem na horizontal, vertical ou ambos.")]),
             ("Realce", [
-                ("Suavizar – média", self.a_media, False, "Desfoque simples; reduz ruído."),
-                ("Suavizar – mediana", self.a_mediana, False, "Remove pontinhos de ruído preservando contornos."),
-                ("Suavizar – gaussiano", self.a_gauss, False, "Desfoque suave e natural."),
+                ("Média", self.a_media, False, "Desfoque simples; reduz ruído."),
+                ("Mediana", self.a_mediana, False, "Remove pontinhos de ruído preservando contornos."),
+                ("Gaussiano", self.a_gauss, False, "Desfoque suave e natural."),
+                ("Nitidez", self.a_nitidez, False, "Aumenta a definição dos detalhes."),
                 ("Bordas – Sobel", self.a_sobel, False, "Destaca contornos pela variação de brilho."),
                 ("Bordas – Canny", self.a_canny, False, "Detector de bordas finas e precisas.")]),
             ("Análise", [
                 ("Histograma", self.a_histograma, False, "Gráfico da distribuição de brilho/cores."),
-                ("Equalizar histograma", self.a_equalizar, False, "Melhora o contraste distribuindo melhor os tons."),
+                ("Equalizar", self.a_equalizar, False, "Melhora o contraste distribuindo melhor os tons."),
                 ("Canais de cor", self.a_canais, False, "Separa azul, verde e vermelho e mostra estatísticas."),
-                ("Binarizar (preto/branco puro)", self.a_binarizar, False, "Limiar fixo, adaptativo ou Otsu."),
-                ("Quantizar (menos cores)", self.a_quantizar, False, "Reduz a quantidade de níveis de cor.")]),
+                ("Binarizar", self.a_binarizar, False, "Preto e branco puro: limiar fixo, adaptativo ou Otsu."),
+                ("Quantizar", self.a_quantizar, False, "Reduz a quantidade de níveis de cor.")]),
             ("Segmentar", [
-                ("Crescimento de regiões", self.a_regioes, False, "Clique num ponto e a região de cor parecida é destacada."),
-                ("Morfologia", self.a_morfologia, False, "Erosão, dilatação, abertura e fechamento.")]),
+                ("Crescer região", self.a_regioes, False, "Clique num ponto e a região de cor parecida é destacada."),
+                ("Morfologia", self.a_morfologia, False, "Erosão, dilatação, abertura e fechamento."),
+                ("Contornos", self.a_contornos, False, "Desenha o contorno dos objetos encontrados."),
+                ("Linhas", self.a_linhas, False, "Encontra segmentos de reta."),
+                ("Círculos", self.a_circulos, False, "Encontra círculos."),
+                ("Cantos", self.a_cantos, False, "Marca cantos e pontos de destaque.")]),
             ("Faces", [
                 ("Detectar faces", self.a_detectar, False, "Marca os rostos encontrados na imagem."),
-                ("Cadastrar aluno (fotos)…", self.a_cadastrar, True, "Guarda fotos de uma pessoa para o reconhecimento."),
+                ("Reconhecer", self.a_reconhecer, False, "Identifica quem aparece na imagem."),
+                ("Cadastrar aluno", self.a_cadastrar, True, "Guarda fotos de uma pessoa para o reconhecimento."),
                 ("Treinar modelo", self.a_treinar, True, "Aprende os rostos cadastrados (refaça após cadastrar)."),
-                ("Reconhecer faces", self.a_reconhecer, False, "Identifica quem aparece na imagem."),
-                ("Chamada automática…", self.a_chamada, True, "Faz a chamada a partir de foto, pasta de fotos ou vídeo."),
-                ("Chamada ao vivo (câmera)…", self.a_chamada_camera, True, "Marca presença em tempo real pela câmera.")]),
+                ("Chamada (fotos)", self.a_chamada, True, "Faz a chamada a partir de foto, pasta de fotos ou vídeo."),
+                ("Chamada (câmera)", self.a_chamada_camera, True, "Marca presença em tempo real pela câmera.")]),
         ]
 
     # ---------- infraestrutura ----------
-    def _executar(self, fn, livre):
+    def _executar(self, fn, livre, host=None):
+        if self._pedindo:
+            self.status.set("Conclua ou cancele o ajuste em andamento antes de escolher outra ferramenta.")
+            return
         if not livre and self.orig is None:
             messagebox.showinfo("Sem imagem", "Abra uma imagem primeiro (Ctrl+O).")
             return
+        if host is not None:
+            self._host = host
         self.config(cursor="watch")
         self.update_idletasks()
         try:
@@ -378,7 +503,10 @@ class App(tk.Tk):
         except (cv2.error, ValueError, OSError, RuntimeError) as e:
             messagebox.showerror("Erro", str(e))
         finally:
-            self.config(cursor="")
+            try:
+                self.config(cursor="")
+            except tk.TclError:  # janela fechada durante a operação
+                pass
 
     def base(self):
         return self.res if self.encadear.get() and self.res is not None else self.orig
@@ -392,7 +520,8 @@ class App(tk.Tk):
     def _mostrar_resultado(self, img, nome):
         self.res = img
         self.p_res.mostrar(img)
-        self.p_res.config(text=f"Processada – {nome}")
+        self._titulo_res = f"Processada – {nome}"
+        self.p_res.config(text=self._titulo_res)
         h, w = img.shape[:2]
         self.status.set(f"{nome}  |  resultado {w}x{h}")
 
@@ -417,10 +546,64 @@ class App(tk.Tk):
         out = filtros.aplicar_filtro(nome, self.base(), self.intensidade.get() / 100)
         (self.aplicar if push else self._mostrar_resultado)(out, f"estilo {nome}")
 
-    def pedir(self, titulo, campos):
-        d = Dialogo(self, titulo, campos)
-        self.wait_window(d)
-        return d.resultado
+    def pedir(self, titulo, campos, previa=None):
+        """Mostra o formulário no painel de ajustes da aba atual e espera Aplicar/Cancelar.
+        Se `previa(valores)` for dada, a imagem processada é atualizada a cada ajuste.
+        Retorna o dicionário de valores, ou None se cancelado."""
+        host = self._host
+        for w in host.winfo_children():
+            w.destroy()
+        agendado = []
+
+        def rodar_previa():
+            agendado.clear()
+            try:
+                img = previa(form.valores())
+            except (ValueError, cv2.error, OSError):
+                self.status.set("Esse ajuste não pôde ser pré-visualizado.")
+                return
+            if img is not None:
+                self.p_res.mostrar(img)
+                self.p_res.config(text=f"Prévia – {titulo}")
+
+        def mudou():
+            if previa is None:
+                return
+            if agendado:
+                self.after_cancel(agendado.pop())
+            agendado.append(self.after(60, rodar_previa))
+
+        form = Formulario(host, titulo, campos, ao_mudar=mudou)
+        form.pack(fill="x")
+        self._pedindo = True
+        mudou()
+        try:
+            self.wait_variable(form.concluido)
+        except tk.TclError:  # janela fechada
+            return None
+        finally:
+            self._pedindo = False
+            try:
+                for a in agendado:
+                    self.after_cancel(a)
+                form.destroy()
+                self._placeholder(host)
+            except tk.TclError:
+                pass
+        if form.resultado is None and previa is not None:  # cancelado: volta ao que havia
+            self.p_res.mostrar(self.res)
+            self.p_res.config(text=self._titulo_res)
+        return form.resultado
+
+    def _ajustar(self, titulo, campos, calc, nome=None):
+        """Padrão das ferramentas com ajuste: prévia ao vivo e, ao aplicar, entra no histórico.
+        `calc(imagem_base, valores)` devolve a imagem resultante."""
+        img = self.base()
+        r = self.pedir(titulo, campos, previa=lambda v: calc(img, v))
+        if r is not None:
+            self.aplicar(calc(img, r), nome(r) if callable(nome) else (nome or titulo))
+            return r
+        return None
 
     def _abrir_imagem_extra(self):
         c = filedialog.askopenfilename(title="Segunda imagem", filetypes=FILTROS_IMG)
@@ -444,7 +627,8 @@ class App(tk.Tk):
         self.historico.clear()
         self.filtro_atual = None
         self.p_orig.mostrar(self.orig)
-        self.p_res.config(text="Processada")
+        self._titulo_res = "Processada"
+        self.p_res.config(text=self._titulo_res)
         self.p_res.mostrar(self.res)
         self._montar_grade()
         self.status.set(f"{os.path.basename(c)}  |  {img.shape[1]}x{img.shape[0]}")
@@ -467,86 +651,111 @@ class App(tk.Tk):
         self.aplicar(p.inverter(self.base()), "Inversão")
 
     def a_brilho(self):
-        r = self.pedir("Brilho e contraste", [("c", "Contraste (1.0 = igual)", float, 1.2),
-                                              ("b", "Brilho (-255..255)", int, 30)])
-        if r:
-            self.aplicar(p.brilho_contraste(self.base(), r["c"], r["b"]), "Brilho/contraste")
+        self._ajustar("Brilho e contraste", [
+            ("c", "Contraste", float, 1.0, (0.2, 3.0, 0.05)),
+            ("b", "Brilho", int, 0, (-255, 255, 1))],
+            lambda im, r: p.brilho_contraste(im, r["c"], r["b"]), "Brilho/contraste")
+
+    def a_saturacao(self):
+        self._ajustar("Saturação", [("f", "Saturação", float, 1.0, (0.0, 3.0, 0.05))],
+                      lambda im, r: p.saturacao(im, r["f"]))
 
     def a_somar(self):
-        img, o = self.base(), self._abrir_imagem_extra()
-        if o is None:
-            return
-        r = self.pedir("Soma", [("w", "Peso da segunda imagem (0..1)", float, 0.5)])
-        if r:
-            self.aplicar(p.somar(img, o, r["w"]), "Soma")
+        outra = self._abrir_imagem_extra()
+        if outra is not None:
+            self._ajustar("Somar imagens", [("w", "Peso da segunda imagem", float, 0.5, (0.0, 1.0, 0.05))],
+                          lambda im, r: p.somar(im, outra, r["w"]), "Soma")
 
     def a_subtrair(self):
-        img, o = self.base(), self._abrir_imagem_extra()
-        if o is not None:
-            self.aplicar(p.subtrair(img, o), "Subtração |A−B|")
+        img, outra = self.base(), self._abrir_imagem_extra()
+        if outra is not None:
+            self.aplicar(p.subtrair(img, outra), "Subtração |A−B|")
 
     def a_cinza(self):
         self.aplicar(p.cinza(self.base()), "Níveis de cinza")
 
     def a_hsv(self):
-        r = self.pedir("RGB ⇄ HSV", [("m", "Exibir", "opcao", "Imagem HSV",
-                                      ["Imagem HSV", "Canal H", "Canal S", "Canal V", "HSV → BGR"])])
-        if not r:
-            return
-        img, m = self.base(), r["m"]
-        if m == "HSV → BGR":
-            self.aplicar(p.hsv_para_bgr(img), m)
-        elif m == "Imagem HSV":
-            self.aplicar(p.para_hsv(img), "HSV (canais exibidos como cores)")
-        else:
-            self.aplicar(cv2.split(p.para_hsv(img))["HSV".index(m[-1])], m)
+        def calc(im, r):
+            m = r["m"]
+            if m == "HSV → BGR":
+                return p.hsv_para_bgr(im)
+            if m == "Imagem HSV":
+                return p.para_hsv(im)
+            return cv2.split(p.para_hsv(im))["HSV".index(m[-1])]
+
+        self._ajustar("RGB ⇄ HSV", [("m", "Exibir", "opcao", "Imagem HSV",
+                                     ["Imagem HSV", "Canal H", "Canal S", "Canal V", "HSV → BGR"])],
+                      calc, lambda r: r["m"])
 
     def a_redimensionar(self):
-        img = self.base()
-        r = self.pedir("Redimensionar", [("e", f"Escala (atual {img.shape[1]}x{img.shape[0]})", float, 0.5),
-                                         ("w", "…ou largura em px (0 = usar escala)", int, 0),
-                                         ("h", "…e altura em px", int, 0)])
-        if r:
-            out = p.redimensionar(img, r["w"], r["h"]) if r["w"] and r["h"] else \
-                p.redimensionar(img, escala=r["e"])
-            self.aplicar(out, "Redimensionada")
+        def calc(im, r):
+            if r["w"] and r["h"]:
+                return p.redimensionar(im, r["w"], r["h"])
+            return p.redimensionar(im, escala=r["e"])
+
+        self._ajustar("Redimensionar", [
+            ("e", "Escala", float, 1.0, (0.1, 3.0, 0.05)),
+            ("w", "Largura px (0 = usar escala)", int, 0, (0, 4000, 10)),
+            ("h", "Altura px", int, 0, (0, 4000, 10))], calc, "Redimensionada")
 
     def a_recortar(self):
         img = self.base()
-        messagebox.showinfo("ROI", "Na janela que abrir, arraste o retângulo e tecle ENTER (C cancela).")
-        x, y, w, h = p.selecionar_roi(img)
-        self.aplicar(p.recortar(img, x, y, w, h), "ROI")
+        H, W = img.shape[:2]
+
+        def calc(im, r):
+            if r["mouse"]:
+                return im
+            return p.recortar(im, r["x"], r["y"], r["w"], r["h"])
+
+        r = self._ajustar("Recortar região", [
+            ("x", "X (esquerda)", int, 0, (0, W - 1, 1)),
+            ("y", "Y (topo)", int, 0, (0, H - 1, 1)),
+            ("w", "Largura", int, W, (1, W, 1)),
+            ("h", "Altura", int, H, (1, H, 1)),
+            ("mouse", "Em vez disso, selecionar com o mouse", bool, False)], calc, "ROI")
+        if r and r["mouse"]:
+            messagebox.showinfo("ROI", "Na janela que abrir, arraste o retângulo e tecle ENTER (C cancela).")
+            x, y, w, h = p.selecionar_roi(img)
+            self.desfazer()  # troca o resultado provisório (imagem inteira) pelo recorte
+            self.aplicar(p.recortar(img, x, y, w, h), "ROI")
+
+    def a_rotacionar(self):
+        self._ajustar("Rotacionar", [
+            ("a", "Ângulo (graus)", int, 0, (-180, 180, 1)),
+            ("x", "Ampliar a tela para caber", bool, True)],
+            lambda im, r: p.rotacionar(im, r["a"], r["x"]), lambda r: f"Rotação {r['a']}°")
+
+    def a_espelhar(self):
+        self._ajustar("Espelhar", [("m", "Direção", "opcao", "horizontal", ["horizontal", "vertical", "ambos"])],
+                      lambda im, r: p.espelhar(im, r["m"]), lambda r: f"Espelho {r['m']}")
 
     # ---------- filtros ----------
-    def _kernel(self, titulo):
-        r = self.pedir(titulo, [("k", "Tamanho do kernel (ímpar)", int, 5)])
-        return r["k"] if r else None
-
     def a_media(self):
-        k = self._kernel("Filtro da média")
-        if k:
-            self.aplicar(p.filtro_media(self.base(), k), f"Média {k}x{k}")
+        self._ajustar("Filtro da média", [("k", "Tamanho do kernel", int, 5, (1, 31, 2))],
+                      lambda im, r: p.filtro_media(im, r["k"]), "Média")
 
     def a_mediana(self):
-        k = self._kernel("Filtro da mediana")
-        if k:
-            self.aplicar(p.filtro_mediana(self.base(), k), f"Mediana {k}x{k}")
+        self._ajustar("Filtro da mediana", [("k", "Tamanho do kernel", int, 5, (1, 31, 2))],
+                      lambda im, r: p.filtro_mediana(im, r["k"]), "Mediana")
 
     def a_gauss(self):
-        r = self.pedir("Filtro gaussiano", [("k", "Tamanho do kernel (ímpar)", int, 5),
-                                            ("s", "Sigma (0 = automático)", float, 0)])
-        if r:
-            self.aplicar(p.filtro_gaussiano(self.base(), r["k"], r["s"]), "Gaussiano")
+        self._ajustar("Filtro gaussiano", [("k", "Tamanho do kernel", int, 5, (1, 31, 2)),
+                                           ("s", "Sigma (0 = automático)", float, 0.0, (0.0, 10.0, 0.1))],
+                      lambda im, r: p.filtro_gaussiano(im, r["k"], r["s"]), "Gaussiano")
+
+    def a_nitidez(self):
+        self._ajustar("Nitidez", [("q", "Quantidade", float, 1.0, (0.0, 5.0, 0.1)),
+                                  ("r", "Raio", int, 2, (1, 10, 1))],
+                      lambda im, r: p.nitidez(im, r["q"], r["r"]), "Nitidez")
 
     def a_sobel(self):
-        r = self.pedir("Sobel", [("k", "Kernel (1, 3, 5 ou 7)", int, 3)])
-        if r:
-            self.aplicar(p.sobel(self.base(), r["k"]), "Sobel")
+        self._ajustar("Sobel", [("k", "Kernel", int, 3, (1, 7, 2))],
+                      lambda im, r: p.sobel(im, r["k"]), "Sobel")
 
     def a_canny(self):
-        r = self.pedir("Canny", [("a", "Limiar inferior", int, 100), ("b", "Limiar superior", int, 200)])
-        if r:
-            self.aplicar(p.canny(self.base(), r["a"], r["b"]), "Canny")
+        self._ajustar("Canny", [("a", "Limiar inferior", int, 100, (0, 500, 1)),
+                                ("b", "Limiar superior", int, 200, (0, 500, 1))],
+                      lambda im, r: p.canny(im, r["a"], r["b"]), "Canny")
 
     # ---------- histograma e intensidade ----------
     def _janela_histogramas(self, titulo, imagens):
@@ -586,20 +795,19 @@ class App(tk.Tk):
                  padx=12, pady=8).pack()
 
     def a_binarizar(self):
-        r = self.pedir("Binarização", [("m", "Método", "opcao", "otsu", ["otsu", "fixo", "adaptativo"]),
-                                       ("l", "Limiar (método fixo)", int, 127)])
-        if r:
-            self.aplicar(p.binarizar(self.base(), r["m"], limiar=r["l"]), f"Binarização ({r['m']})")
+        self._ajustar("Binarização", [
+            ("m", "Método", "opcao", "otsu", ["otsu", "fixo", "adaptativo"]),
+            ("l", "Limiar (só no método fixo)", int, 127, (0, 255, 1))],
+            lambda im, r: p.binarizar(im, r["m"], limiar=r["l"]), lambda r: f"Binarização ({r['m']})")
 
     def a_quantizar(self):
-        r = self.pedir("Quantização", [("n", "Níveis por canal (2..256)", int, 4)])
-        if r:
-            self.aplicar(p.quantizar(self.base(), r["n"]), f"Quantização ({r['n']} níveis)")
+        self._ajustar("Quantização", [("n", "Níveis por canal", int, 4, (2, 64, 1))],
+                      lambda im, r: p.quantizar(im, r["n"]), lambda r: f"Quantização ({r['n']} níveis)")
 
     # ---------- segmentação ----------
     def a_regioes(self):
         img = self.base()
-        r = self.pedir("Crescimento de regiões", [("t", "Tolerância", int, 20)])
+        r = self.pedir("Crescimento de regiões", [("t", "Tolerância", int, 20, (0, 100, 1))])
         if not r:
             return
         messagebox.showinfo("Semente", "Na janela que abrir, clique no ponto inicial (ESC cancela).")
@@ -610,15 +818,55 @@ class App(tk.Tk):
         self.aplicar(p.destacar_regiao(img, mascara), f"Região ({int((mascara > 0).sum())} px)")
 
     def a_morfologia(self):
-        r = self.pedir("Morfologia", [
+        def calc(im, r):
+            base = p.binarizar(im, "otsu") if r["bin"] else im
+            return p.morfologia(base, r["op"], r["k"], r["f"], r["i"])
+
+        self._ajustar("Morfologia", [
             ("op", "Operação", "opcao", "erosao", ["erosao", "dilatacao", "abertura", "fechamento"]),
-            ("k", "Kernel", int, 3),
+            ("k", "Kernel", int, 3, (1, 31, 2)),
             ("f", "Formato", "opcao", "retangulo", ["retangulo", "elipse", "cruz"]),
-            ("i", "Iterações", int, 1),
-            ("bin", "Binarizar (Otsu) antes", bool, True)])
-        if r:
-            img = p.binarizar(self.base(), "otsu") if r["bin"] else self.base()
-            self.aplicar(p.morfologia(img, r["op"], r["k"], r["f"], r["i"]), r["op"].capitalize())
+            ("i", "Iterações", int, 1, (1, 10, 1)),
+            ("bin", "Binarizar (Otsu) antes", bool, True)], calc, lambda r: r["op"].capitalize())
+
+    def _detector(self, titulo, campos, funcao, rotulo):
+        """Ferramentas que desenham formas e informam quantas foram achadas."""
+        n = []
+
+        def calc(im, r):
+            out, qtd = funcao(im, r)
+            n[:] = [qtd]
+            return out
+
+        if self._ajustar(titulo, campos, calc, rotulo) is not None and n:
+            self.status.set(f"{rotulo}: {n[0]} encontrado(s)")
+
+    def a_contornos(self):
+        self._detector("Contornos", [
+            ("a", "Área mínima (px)", int, 100, (0, 5000, 10)),
+            ("t1", "Limiar inferior", int, 50, (0, 255, 1)),
+            ("t2", "Limiar superior", int, 150, (0, 255, 1))],
+            lambda im, r: p.contornos(im, r["t1"], r["t2"], r["a"]), "Contornos")
+
+    def a_linhas(self):
+        self._detector("Linhas", [
+            ("l", "Sensibilidade (menor = mais linhas)", int, 80, (10, 300, 5)),
+            ("c", "Comprimento mínimo", int, 40, (5, 500, 5)),
+            ("g", "Falha máxima", int, 10, (1, 100, 1))],
+            lambda im, r: p.linhas(im, r["l"], r["c"], r["g"]), "Linhas")
+
+    def a_circulos(self):
+        self._detector("Círculos", [
+            ("s", "Sensibilidade (menor = mais círculos)", int, 30, (10, 100, 1)),
+            ("a", "Raio mínimo", int, 10, (0, 300, 1)),
+            ("b", "Raio máximo (0 = livre)", int, 0, (0, 600, 1))],
+            lambda im, r: p.circulos(im, r["s"], r["a"], r["b"]), "Círculos")
+
+    def a_cantos(self):
+        self._detector("Cantos", [
+            ("n", "Máximo de cantos", int, 100, (1, 500, 1)),
+            ("q", "Qualidade (%)", int, 1, (1, 50, 1))],
+            lambda im, r: p.cantos(im, r["n"], r["q"] / 100), "Cantos")
 
     # ---------- reconhecimento facial ----------
     def a_detectar(self):
@@ -650,7 +898,7 @@ class App(tk.Tk):
     def a_chamada(self):
         r = self.pedir("Chamada automática", [
             ("fonte", "Foto, pasta de fotos ou vídeo", "caminho", ""),
-            ("conf", "Reconhecimentos p/ marcar presença", int, 1)])
+            ("conf", "Reconhecimentos p/ marcar presença", int, 1, (1, 30, 1))])
         if not r or not r["fonte"]:
             return
         pres, aus = rf.chamada(r["fonte"], confirmacoes=r["conf"], salvar_anotadas="chamada_anotada")
@@ -675,7 +923,7 @@ class App(tk.Tk):
             return
         r = self.pedir("Chamada ao vivo", [
             ("idx", "Câmera: índice (0, 1…) ou IP do celular", str, "192.168.18.4"),
-            ("conf", "Quadros de reconhecimento p/ marcar presença", int, 5)])
+            ("conf", "Quadros de reconhecimento p/ marcar presença", int, 5, (1, 30, 1))])
         if not r:
             return
         sessao = rf.SessaoChamada(confirmacoes=r["conf"])

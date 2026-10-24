@@ -242,3 +242,81 @@ def morfologia(img, operacao="erosao", k=3, formato="retangulo", iteracoes=1):
              "cruz": cv2.MORPH_CROSS}[formato]
     kernel = cv2.getStructuringElement(forma, (_impar(k), _impar(k)))
     return cv2.morphologyEx(img, _OPS_MORF[operacao], kernel, iterations=int(iteracoes))
+
+
+# ---------- Ajustes extras e detecção de formas ----------
+
+def saturacao(img, fator=1.0):
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV).astype(np.float32)
+    hsv[:, :, 1] = np.clip(hsv[:, :, 1] * fator, 0, 255)
+    return cv2.cvtColor(hsv.astype(np.uint8), cv2.COLOR_HSV2BGR)
+
+
+def nitidez(img, quantidade=1.0, raio=2):
+    """Máscara de nitidez (unsharp mask): realça o que o desfoque gaussiano remove."""
+    k = _impar(raio * 2 + 1)
+    desfoque = cv2.GaussianBlur(img, (k, k), 0)
+    return cv2.addWeighted(img, 1 + quantidade, desfoque, -quantidade, 0)
+
+
+def rotacionar(img, angulo, expandir=True):
+    h, w = img.shape[:2]
+    m = cv2.getRotationMatrix2D((w / 2, h / 2), angulo, 1.0)
+    if not expandir:
+        return cv2.warpAffine(img, m, (w, h))
+    cos, sen = abs(m[0, 0]), abs(m[0, 1])
+    nw, nh = int(h * sen + w * cos), int(h * cos + w * sen)
+    m[0, 2] += nw / 2 - w / 2
+    m[1, 2] += nh / 2 - h / 2
+    return cv2.warpAffine(img, m, (nw, nh))
+
+
+def espelhar(img, modo="horizontal"):
+    return cv2.flip(img, {"horizontal": 1, "vertical": 0, "ambos": -1}[modo])
+
+
+def contornos(img, t1=50, t2=150, area_min=100):
+    """Contornos externos a partir das bordas de Canny. Retorna (imagem desenhada, quantidade)."""
+    bordas = cv2.dilate(canny(cv2.GaussianBlur(_bgr(img), (5, 5), 0), t1, t2), np.ones((3, 3), np.uint8))
+    achados, _ = cv2.findContours(bordas, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    achados = [c for c in achados if cv2.contourArea(c) >= area_min]
+    saida = _bgr(img).copy()
+    cv2.drawContours(saida, achados, -1, (0, 255, 0), 2)
+    return saida, len(achados)
+
+
+def linhas(img, limiar=80, comprimento_min=40, falha_max=10):
+    """Segmentos de reta (Hough probabilístico). Retorna (imagem desenhada, quantidade)."""
+    bordas = canny(img, 50, 150)
+    achadas = cv2.HoughLinesP(bordas, 1, np.pi / 180, limiar, minLineLength=comprimento_min,
+                              maxLineGap=falha_max)
+    saida = _bgr(img).copy()
+    n = 0 if achadas is None else len(achadas)
+    for x1, y1, x2, y2 in ([] if achadas is None else achadas[:, 0]):
+        cv2.line(saida, (x1, y1), (x2, y2), (0, 0, 255), 2)
+    return saida, n
+
+
+def circulos(img, sensibilidade=30, raio_min=10, raio_max=0):
+    """Círculos (Hough). `sensibilidade` baixa = mais círculos (e mais falsos). raio_max 0 = sem limite."""
+    g = cv2.medianBlur(img if img.ndim == 2 else cinza(img), 5)
+    achados = cv2.HoughCircles(g, cv2.HOUGH_GRADIENT, 1.2, max(10, g.shape[0] // 8),
+                               param1=100, param2=max(5, sensibilidade),
+                               minRadius=int(raio_min), maxRadius=int(raio_max))
+    saida = _bgr(img).copy()
+    n = 0 if achados is None else achados.shape[1]
+    for x, y, r in ([] if achados is None else np.round(achados[0]).astype(int)):
+        cv2.circle(saida, (x, y), r, (255, 0, 255), 2)
+        cv2.circle(saida, (x, y), 2, (0, 255, 255), 3)
+    return saida, n
+
+
+def cantos(img, maximo=100, qualidade=0.01):
+    """Cantos de Shi-Tomasi. Retorna (imagem desenhada, quantidade)."""
+    g = img if img.ndim == 2 else cinza(img)
+    achados = cv2.goodFeaturesToTrack(g, int(maximo), max(1e-4, qualidade), 10)
+    saida = _bgr(img).copy()
+    n = 0 if achados is None else len(achados)
+    for x, y in ([] if achados is None else np.round(achados[:, 0]).astype(int)):
+        cv2.circle(saida, (x, y), 4, (0, 200, 255), -1)
+    return saida, n

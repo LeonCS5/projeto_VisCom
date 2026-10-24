@@ -13,9 +13,7 @@ def _contraste(img, c, brilho=0):
 
 
 def _saturacao(img, f):
-    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV).astype(np.float32)
-    hsv[:, :, 1] = np.clip(hsv[:, :, 1] * f, 0, 255)
-    return cv2.cvtColor(hsv.astype(np.uint8), cv2.COLOR_HSV2BGR)
+    return p.saturacao(img, f)
 
 
 def _ganhos(img, b=1.0, g=1.0, r=1.0):

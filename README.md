@@ -6,7 +6,10 @@ Software completo de Processamento Digital de Imagens (PDI), Visão Computaciona
 
 ## 🚀 Funcionalidades
 
-### ✨ Estilos prontos (aba "Estilos" da interface gráfica)
+### 🎛️ Ajustes no próprio painel
+Cada ferramenta abre seus controles embaixo dos botões, na mesma aba (sem janelas novas): barras deslizantes com caixa numérica, listas de opções e caixas de seleção, com **prévia ao vivo** na imagem processada. Os botões *Aplicar*, *↺ (padrão)* e *Cancelar* confirmam, restauram ou descartam o ajuste. Ferramentas extras: saturação, nitidez, rotação, espelhamento e detecção de contornos, linhas, círculos e cantos.
+
+### ✨ Estilos prontos (última aba da interface gráfica)
 20 filtros de um clique no estilo de apps de foto (Clarendon, Gingham, Juno, Lark, Valencia, Nashville, Lo-fi, Moon, Noir, Sépia, Vintage, Frio, Quente, Pele suave, Desenho, Lápis, Pôster, Pixelado, Vinheta), com miniatura de pré-visualização da própria foto e controle de **intensidade** (0–100%). Também há desfazer (Ctrl+Z), atalhos, dicas ao passar o mouse e ajuda embutida. Os filtros ficam em `filtros.py`, montados com as operações do módulo de processamento.
 
 ### 🎨 Operações Básicas
