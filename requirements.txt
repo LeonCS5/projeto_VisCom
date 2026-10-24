@@ -1,4 +1,5 @@
 opencv-contrib-python<5
 numpy
 matplotlib
+pillow
 pytest

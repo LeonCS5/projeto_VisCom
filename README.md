@@ -6,7 +6,8 @@ Software de processamento de imagens e vídeo com menu em terminal (Python + Ope
 
 ```
 pip install -r requirements.txt
-python main.py
+python gui.py     # interface gráfica
+python main.py    # menu em terminal
 ```
 
 ## Módulos
