@@ -1,4 +1,6 @@
-faces/
+faces/*
+!faces/README.md
+!faces/.gitkeep
 modelo_lbph.yml
 rotulos.txt
 chamada.csv
