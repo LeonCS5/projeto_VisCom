@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="VisCom: processamento de imagens, visão computacional e reconhecimento facial em Python.">
+  <title>VisCom | Processamento de Imagens</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f5f7fb;
+      --surface: #ffffff;
+      --text: #172033;
+      --muted: #536078;
+      --accent: #315ee7;
+      --accent-soft: #e8edff;
+      --border: #d8deea;
+      --code: #eef1f7;
+      --shadow: 0 14px 36px rgba(31, 48, 86, .09);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #101522;
+        --surface: #182033;
+        --text: #edf2ff;
+        --muted: #b2bdd3;
+        --accent: #8ea8ff;
+        --accent-soft: #26345f;
+        --border: #303b54;
+        --code: #222c43;
+        --shadow: 0 14px 36px rgba(0, 0, 0, .22);
+      }
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 16px/1.6 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    a { color: var(--accent); }
+    .wrap { width: min(1120px, calc(100% - 2rem)); margin: 0 auto; }
+    header {
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(135deg, var(--surface), var(--accent-soft));
+    }
+    nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 1rem 0;
+    }
+    nav strong { letter-spacing: .08em; }
+    nav a { text-decoration: none; font-weight: 650; }
+    .hero { padding: clamp(3rem, 8vw, 7rem) 0; }
+    .eyebrow {
+      color: var(--accent);
+      font-weight: 750;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+    h1, h2, h3 { line-height: 1.15; margin-top: 0; }
+    h1 { max-width: 760px; font-size: clamp(2.4rem, 7vw, 5rem); margin-bottom: 1.25rem; }
+    h2 { font-size: clamp(1.7rem, 4vw, 2.4rem); margin-bottom: 1rem; }
+    .lead { max-width: 720px; color: var(--muted); font-size: clamp(1.1rem, 2vw, 1.35rem); }
+    .actions { display: flex; flex-wrap: wrap; gap: .8rem; margin-top: 2rem; }
+    .button {
+      display: inline-block;
+      border: 1px solid var(--accent);
+      border-radius: .65rem;
+      padding: .7rem 1rem;
+      background: var(--accent);
+      color: #fff;
+      text-decoration: none;
+      font-weight: 700;
+    }
+    .button.secondary { background: transparent; color: var(--accent); }
+    section { padding: 4.5rem 0; }
+    .section-intro { max-width: 720px; color: var(--muted); }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+    .card {
+      padding: 1.35rem;
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+    .card h3 { margin-bottom: .5rem; }
+    .card p { margin: 0; color: var(--muted); }
+    .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 1rem; box-shadow: var(--shadow); }
+    table { width: 100%; border-collapse: collapse; background: var(--surface); }
+    th, td { padding: .9rem 1rem; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+    th { background: var(--accent-soft); }
+    tr:last-child td { border-bottom: 0; }
+    code, pre { background: var(--code); border-radius: .4rem; }
+    code { padding: .12rem .35rem; }
+    pre { overflow-x: auto; padding: 1rem; border: 1px solid var(--border); }
+    .steps { display: grid; gap: 1rem; counter-reset: step; }
+    .step { display: grid; grid-template-columns: 2.4rem 1fr; gap: 1rem; align-items: start; }
+    .step::before {
+      counter-increment: step;
+      content: counter(step);
+      display: grid;
+      place-items: center;
+      width: 2.4rem;
+      height: 2.4rem;
+      border-radius: 50%;
+      background: var(--accent);
+      color: #fff;
+      font-weight: 800;
+    }
+    footer { padding: 2rem 0; border-top: 1px solid var(--border); color: var(--muted); }
+    @media (max-width: 760px) {
+      nav { align-items: flex-start; flex-direction: column; }
+      .grid { grid-template-columns: 1fr; }
+      section { padding: 3rem 0; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <nav aria-label="Navegação principal">
+        <strong>VISCOM</strong>
+        <a href="#instalacao">Instalação</a>
+      </nav>
+      <div class="hero">
+        <div class="eyebrow">Python + OpenCV</div>
+        <h1>Processamento de imagens para explorar a visão computacional.</h1>
+        <p class="lead">O VisCom é um aplicativo desktop para processamento digital de imagens, filtros artísticos, análise visual e reconhecimento facial com chamada automática. Ele roda localmente em Tkinter e OpenCV — esta página é apenas a apresentação do projeto.</p>
+        <div class="actions">
+          <a class="button" href="https://github.com/LeonCS5/projeto_VisCom">Ver no GitHub</a>
+          <a class="button secondary" href="#funcionalidades">Conhecer funcionalidades</a>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section id="funcionalidades">
+      <div class="wrap">
+        <h2>O que o VisCom faz</h2>
+        <p class="section-intro">Uma ferramenta modular para estudar e aplicar operações clássicas de PDI e visão computacional em uma interface gráfica ou no terminal.</p>
+        <div class="grid">
+          <article class="card"><h3>Operações básicas</h3><p>Brilho, contraste, soma, subtração, escala de cinza, HSV, redimensionamento, recorte, rotação e espelhamento.</p></article>
+          <article class="card"><h3>Filtros e análise</h3><p>Filtros de média, mediana e gaussiano, nitidez, Sobel, Canny, histogramas, equalização, canais, binarização e quantização.</p></article>
+          <article class="card"><h3>Segmentação</h3><p>Crescimento de regiões, morfologia, contornos, retas e círculos de Hough e detecção de cantos Shi-Tomasi.</p></article>
+          <article class="card"><h3>20 estilos artísticos</h3><p>Filtros prontos inspirados em estilos fotográficos, com intensidade ajustável e prévia na GUI.</p></article>
+          <article class="card"><h3>Reconhecimento facial</h3><p>Detecção Haar Cascade e reconhecimento LBPH para cadastro, treinamento e identificação local.</p></article>
+          <article class="card"><h3>Várias entradas</h3><p>Chamada por foto, pasta, vídeo ou câmera ao vivo, além de uma GUI desktop e uma CLI para uso headless.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <h2>Módulos do projeto</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Módulo</th><th>Responsabilidade</th></tr></thead>
+            <tbody>
+              <tr><td><code>processamento.py</code></td><td>Funções puras de processamento e visão computacional.</td></tr>
+              <tr><td><code>filtros.py</code></td><td>Composição dos 20 estilos artísticos.</td></tr>
+              <tr><td><code>reconhecimento.py</code></td><td>Haar, LBPH, cadastro e sessões de chamada.</td></tr>
+              <tr><td><code>gui.py</code></td><td>Interface Tkinter com prévias, parâmetros, histórico e zoom.</td></tr>
+              <tr><td><code>main.py</code></td><td>Menu de terminal para operações e fluxos de reconhecimento.</td></tr>
+              <tr><td><code>test_*.py</code></td><td>Testes automatizados das operações, filtros, GUI e CLI.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="instalacao">
+      <div class="wrap">
+        <h2>Instalação e uso</h2>
+        <div class="steps">
+          <div class="step"><div><h3>Clone e entre no projeto</h3><pre><code>git clone https://github.com/LeonCS5/projeto_VisCom.git
+cd projeto_VisCom</code></pre></div></div>
+          <div class="step"><div><h3>Crie um ambiente virtual</h3><pre><code>python -m venv .venv
+source .venv/bin/activate</code></pre><p>No Windows, use <code>.venv\Scripts\Activate.ps1</code>.</p></div></div>
+          <div class="step"><div><h3>Instale as dependências</h3><pre><code>pip install -r requirements.txt</code></pre></div></div>
+          <div class="step"><div><h3>Escolha uma interface</h3><pre><code>python gui.py
+# ou
+python main.py</code></pre></div></div>
+        </div>
+        <p class="section-intro">O cadastro e o reconhecimento facial geram dados localmente durante a execução. Não há fotos, modelos treinados, rótulos ou chamadas pessoais publicados neste site.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">VisCom · <a href="https://github.com/LeonCS5/projeto_VisCom">repositório no GitHub</a></div>
+  </footer>
+</body>
+</html>

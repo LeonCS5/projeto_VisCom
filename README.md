@@ -4,6 +4,12 @@ Software completo de **Processamento Digital de Imagens (PDI)**, **Visão Comput
 - **Interface Gráfica (GUI):** Interface desktop moderna em Tkinter + Pillow, com visualização lado a lado ("Original" vs "Processada"), formulários embutidos no painel lateral com **prévia em tempo real**, suporte a desfazer (Ctrl+Z) e 20 estilos artísticos prontos.
 - **Interface em Linha de Comando (CLI):** Menu de terminal interativo para uso headless ou testes rápidos via OpenCV (`cv2.imshow`).
 
+[![CI](https://github.com/LeonCS5/projeto_VisCom/actions/workflows/ci.yml/badge.svg)](https://github.com/LeonCS5/projeto_VisCom/actions/workflows/ci.yml)
+
+## 🌐 Site do projeto
+
+A página de apresentação estática do projeto está disponível em [leoncs5.github.io/projeto_VisCom](https://leoncs5.github.io/projeto_VisCom/).
+
 ---
 
 ## 🚦 Estado Atual do Projeto
