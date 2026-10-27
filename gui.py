@@ -282,6 +282,8 @@ class App(tk.Tk):
         self.historico = []
         self.filtro_atual = None
         self._miniaturas = []
+        self._ao_vivo = None
+        self._encerrar_chamada = lambda: None
         self._host = None  # painel de ajustes onde os formulários aparecem
         self._pedindo = False
         self._titulo_res = "Processada"
@@ -488,6 +490,9 @@ class App(tk.Tk):
 
     # ---------- infraestrutura ----------
     def _executar(self, fn, livre, host=None):
+        if self._ao_vivo:
+            self.status.set("Encerre a chamada ao vivo antes de usar outra ferramenta.")
+            return
         if self._pedindo:
             self.status.set("Conclua ou cancele o ajuste em andamento antes de escolher outra ferramenta.")
             return
@@ -918,34 +923,44 @@ class App(tk.Tk):
 
     # ---------- chamada ao vivo ----------
     def a_chamada_camera(self):
-        if getattr(self, "_ao_vivo", None):
-            messagebox.showinfo("Chamada", "Já existe uma chamada em andamento.")
-            return
         r = self.pedir("Chamada ao vivo", [
-            ("idx", "Câmera: índice (0, 1…) ou IP do celular", str, "192.168.18.4"),
+            ("idx", "Câmera (0 = primeira)", int, 0, (0, 5, 1)),
             ("conf", "Quadros de reconhecimento p/ marcar presença", int, 5, (1, 30, 1))])
         if not r:
             return
         sessao = rf.SessaoChamada(confirmacoes=r["conf"])
         cap = rf.abrir_camera(r["idx"])
 
-        painel = tk.Toplevel(self)
-        painel.title("Chamada ao vivo")
-        lista = tk.Listbox(painel, width=34, height=14)
-        lista.pack(fill="both", expand=True, padx=8, pady=8)
+        # a área do "Original" dá lugar à lista de presença; o vídeo anotado vai para a "Processada"
+        self.p_orig.grid_remove()
+        painel = ttk.LabelFrame(self.p_orig.master, text="Chamada ao vivo", padding=10)
+        painel.grid(row=0, column=0, sticky="nsew", padx=(0, 3))
         info = tk.StringVar()
-        ttk.Label(painel, textvariable=info).pack()
+        ttk.Label(painel, textvariable=info, style="Titulo.TLabel").pack(anchor="w")
+        ttk.Label(painel, text="Presentes (na ordem em que foram reconhecidos):", foreground="#666"
+                  ).pack(anchor="w", pady=(6, 2))
+        lista = tk.Listbox(painel, font=("Segoe UI", 12), activestyle="none")
+        lista.pack(fill="both", expand=True)
+        ttk.Button(painel, text="⏹  Encerrar chamada", style="Acao.TButton",
+                   command=lambda: self._encerrar_chamada()).pack(fill="x", pady=(10, 0))
+        self.p_res.config(text="Câmera ao vivo")
         self._ao_vivo = True
 
         def encerrar():
+            if not self._ao_vivo:
+                return
             self._ao_vivo = None
+            self._encerrar_chamada = lambda: None
             cap.release()
             painel.destroy()
+            self.p_orig.grid()
+            self.p_orig.mostrar(self.orig)
+            self.p_res.mostrar(self.res)
+            self.p_res.config(text=self._titulo_res)
             self.status.set(f"Chamada encerrada. Presentes: {', '.join(sorted(sessao.presentes)) or '-'}  |  "
                             f"Ausentes: {', '.join(sessao.ausentes) or '-'}. Registro em chamada.csv")
 
-        ttk.Button(painel, text="Encerrar chamada", command=encerrar).pack(pady=8)
-        painel.protocol("WM_DELETE_WINDOW", encerrar)
+        self._encerrar_chamada = encerrar
 
         def passo():
             if not self._ao_vivo:
@@ -953,11 +968,10 @@ class App(tk.Tk):
             ok, quadro = cap.read()
             if ok:
                 vis, novos = sessao.processar(quadro)
-                self.p_orig.mostrar(quadro)
                 self.p_res.mostrar(vis)
                 for n in novos:
-                    lista.insert("end", f"✔ {n}")
-                info.set(f"Presentes: {len(sessao.presentes)}/{len(sessao.nomes)}")
+                    lista.insert("end", f"✔  {n}")
+                info.set(f"Presentes: {len(sessao.presentes)} de {len(sessao.nomes)}")
                 self.status.set("Chamada ao vivo em andamento…")
             self.after(15, passo)
 

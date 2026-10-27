@@ -204,13 +204,16 @@ def test_chamada_ao_vivo(app, monkeypatch):
             pass
 
     monkeypatch.setattr(rf, "abrir_camera", lambda i: CamFalsa())
-    com_respostas(monkeypatch, app, {"idx": "1", "conf": 3})
+    com_respostas(monkeypatch, app, {"idx": 1, "conf": 3})
     app.a_chamada_camera()
     for _ in range(10):
         app.update()
         app.after(20)
     assert app._ao_vivo
-    app._ao_vivo = None  # simula o encerramento
+    assert not app.p_orig.winfo_ismapped() or app.p_orig.winfo_manager() == ""  # "Original" cedeu o lugar
+    assert app.p_res.img is not None  # vídeo anotado aparece na "Processada"
+    app._encerrar_chamada()
+    assert not app._ao_vivo and app.p_orig.winfo_manager() == "grid"
     with open("chamada.csv", encoding="utf-8") as f:
         linhas = f.read()
     assert "bia" in linhas and "ana" not in linhas.split("aluno")[1]

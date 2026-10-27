@@ -21,7 +21,7 @@ O projeto encontra-se em **estado avançado, maduro e 100% funcional**, com todo
 | **Estilos Artísticos (20 Filtros tipo Instagram)** | `filtros.py` | Concluído | 100% (`test_filtros.py`) |
 | **Pipeline Facial (Haar Cascade + LBPH)** | `reconhecimento.py` | Concluído | 100% (`test_processamento.py`) |
 | **Chamada por Fotos, Pastas e Vídeos** | `reconhecimento.py` | Concluído | 100% (`test_processamento.py`) |
-| **Chamada ao Vivo (Webcam e Câmera IP / DroidCam)** | `reconhecimento.py` | Concluído | 100% (`test_gui.py`, `test_menu.py`) |
+| **Chamada ao Vivo (câmera USB/webcam)** | `reconhecimento.py` | Concluído | 100% (`test_gui.py`, `test_menu.py`) |
 | **Interface Gráfica com Ajustes Embutidos** | `gui.py` | Concluído | 100% (`test_gui.py`) |
 | **Menu de Terminal (CLI)** | `main.py` | Concluído | 100% (`test_menu.py`) |
 | **Suíte de Testes Automatizados** | `test_*.py` | **128 testes passando** | Execução via `pytest` |
@@ -73,7 +73,7 @@ projeto_VisCom/
 | :--- | :--- | :--- |
 | **`processamento.py`** | Funções puras de imagem: recebem um `ndarray` BGR/Cinza e parâmetros, retornam um novo `ndarray`. Devem ser puras e não mutar o array original. | Diálogos com usuário, janelas, `print()`, chamadas de `input()`. |
 | **`filtros.py`** | Composições estéticas de filtros inspirados no Instagram (Clarendon, Vintage, Noir, etc.) que utilizam as funções de `processamento.py`. | Lógica de interface com usuário ou gerenciamento de janelas. |
-| **`reconhecimento.py`** | Algoritmos de detecção (`cv2.CascadeClassifier`), treino e predição (`cv2.face.LBPHFaceRecognizer`), sessão de chamada (`SessaoChamada`), leitura de câmeras (webcam, DroidCam, RTSP) e gravação de CSV. | Telas Tkinter ou menus de texto interativos. |
+| **`reconhecimento.py`** | Algoritmos de detecção (`cv2.CascadeClassifier`), treino e predição (`cv2.face.LBPHFaceRecognizer`), sessão de chamada (`SessaoChamada`), leitura da câmera e gravação de CSV. | Telas Tkinter ou menus de texto interativos. |
 | **`gui.py`** | Layouts Tkinter, abas, controles deslizantes (`Formulario`), manipulação de eventos do mouse/teclado, conversão OpenCV -> ImageTk e exibição em Canvas. | Cálculos matemáticos de filtros ou manipulação direta de matrizes de imagem sem usar os módulos de lógica. |
 | **`main.py`** | Loop de menu textual no terminal, captura de entradas com `input()`, roteamento para as funções dos módulos e exibição rápida via `cv2.imshow`. | Redefinição de filtros já existentes em `processamento.py`. |
 
@@ -83,7 +83,7 @@ projeto_VisCom/
 
 ### Pré-requisitos
 - **Python 3.9 a 3.12** instalado no sistema.
-- Câmera integrada (webcam) ou celular com app **DroidCam** / **IP Webcam** (caso deseje testar a chamada ao vivo).
+- Câmera USB ou webcam (para a chamada ao vivo).
 
 ### 1. Clonar o repositório
 ```bash
@@ -175,8 +175,7 @@ Há três maneiras de executar a chamada:
 1. **Por Foto ou Pasta de Fotos:** Analisa as fotos da turma e marca quem estiver presente.
 2. **Por Arquivo de Vídeo (`.mp4`, `.avi`, etc.):** Analisa os frames e marca presença após um número configurável de confirmações consecutivas.
 3. **Pela Câmera ao Vivo:**
-   - **Webcam Integrada:** Informe `0` (ou `1`).
-   - **Celular via DroidCam:** Deixe o app DroidCam aberto no celular na mesma rede Wi-Fi e informe o IP exibido na tela (ex.: `192.168.18.4` ou `192.168.1.15:4747`). O sistema conecta automaticamente via streaming HTTP.
+   - Escolha o número da câmera (0 = primeira; se houver webcam e câmera USB, tente 1).
    - Pressione `ESC` na janela para encerrar a sessão.
 
 **Resultados Gerados:**

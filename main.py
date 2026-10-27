@@ -295,7 +295,7 @@ def a_chamada():
 
 
 def a_chamada_camera():
-    idx = perguntar("Câmera: índice (0, 1…) ou IP do celular", str, "192.168.18.4")
+    idx = perguntar("Câmera (0 = primeira)", int, 0)
     conf = perguntar("Quadros de reconhecimento para marcar presença", int, 5)
     print("Janela aberta: tecle ESC nela para encerrar.")
     try:
